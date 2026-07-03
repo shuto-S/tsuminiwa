@@ -113,16 +113,16 @@ src/renderer/
 - 夜(daynight.isNight): ひとは manager.setNight() で家・たきびに割り当てられて歩いて向かい、
   着くと sleeping。動物はその場で眠る。朝に起きる。
   **3日にいちど(day % 3 === 2)、たきびがあればおまつり**: 全員が火を囲んで dancing。
-- 世代: にわとりの卵(manager.eggs、保存されない)→ ひよこ、こひつじ誕生(低確率で
-  variant 'black' のくろいこひつじ)、baby は BABY_SCALE で小さく GROW_TIME で成長。
-- **訪問者**(VISITOR_TYPES: traveler/deer/cat)は歩数制で去る。main の updateVisitors が
-  抽選(旅人70% / しか17% / ねこ13%)。旅人だけ、家に空きがあれば villager として移住。
-  **serialize には含めない**。
+- 世代: にわとりの卵(manager.eggs、保存されない)→ ひよこ、こひつじ誕生、baby は
+  BABY_SCALE で小さく GROW_TIME で成長。
+- **訪問者**(VISITOR_TYPES)は歩数制で去る。main の updateVisitors が種類を抽選する。
+  旅人だけ、家に空きがあれば villager として移住。**serialize には含めない**。
 
-### レアイベント
-- critters.js: 金色のさかな(ジャンプの5%)、流星群(晴れた夜に確率 dt/2400、25秒)、
-  そらクジラ(確率 dt/9000 ≒ 数時間にいちど)。通知は critters.onEvent 経由。
-- つりびとの釣果にも3%で金色のさかな。レアの追加はこのパターン(低確率ロール+トースト)に倣う。
+### レアイベント(ネタバレ注意)
+- 低確率・超低確率の訪問者やできごとが存在するが、**プレイヤーの楽しみを守るため
+  種類・確率はドキュメントに書かない**(README でも「ひみつ」とだけ匂わせている)。
+  実装は critters.js と characters.js の低確率ロール+トースト通知のパターンを参照。
+  新しいレアを足すときも同じパターンに倣い、ドキュメントには具体を書かないこと。
 
 ### 設定の追加手順
 新しい設定(DEFAULT_SETTINGS のキー)を足すときは4か所:
