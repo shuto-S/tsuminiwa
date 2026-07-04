@@ -1,4 +1,4 @@
-import { BLOCK_TYPES } from './config.js';
+import { BLOCK_TYPES, AI_MODELS } from './config.js';
 import { t, setLanguage, applyDomTranslations, LOCALES } from './i18n/index.js';
 
 export function setupUI(callbacks, state) {
@@ -187,8 +187,79 @@ export function setupUI(callbacks, state) {
     callbacks.regenerate(Number(gridSize.value), Number(maxHeight.value));
   });
 
+  setupAiSettings(callbacks, state);
   setupTooltips();
   setupAutoHide();
+}
+
+// ---- AI(Gemini)設定の配線 ----
+function setupAiSettings(callbacks, state) {
+  const s = state.settings;
+  const aiConfig = document.getElementById('ai-config');
+  const enabled = document.getElementById('opt-ai-enabled');
+  const authSel = document.getElementById('opt-ai-auth');
+  const modelSel = document.getElementById('opt-ai-model');
+  const keyInput = document.getElementById('ai-key-input');
+  const keyStatus = document.getElementById('ai-key-status');
+  const consent = document.getElementById('opt-ai-consent');
+
+  // 認証方式・モデルの選択肢
+  for (const [value, key] of [
+    ['developer', 'settings.aiAuthDeveloper'],
+    ['vertex-express', 'settings.aiAuthVertex'],
+  ]) {
+    const o = document.createElement('option');
+    o.value = value;
+    o.dataset.i18n = key; // 言語切替で applyDomTranslations が textContent を更新
+    o.textContent = t(key);
+    authSel.appendChild(o);
+  }
+  for (const m of AI_MODELS) {
+    const o = document.createElement('option');
+    o.value = o.textContent = m;
+    modelSel.appendChild(o);
+  }
+
+  const refreshKeyStatus = async () => {
+    const has = await window.tsuminiwa.ai.hasKey();
+    keyStatus.textContent = t(has ? 'settings.aiKeySaved' : 'settings.aiKeyNone');
+  };
+
+  const syncVisibility = () => aiConfig.classList.toggle('hidden', !enabled.checked);
+
+  enabled.checked = s.aiEnabled;
+  authSel.value = s.aiAuthMode;
+  modelSel.value = s.aiModel;
+  consent.checked = s.aiConsent;
+  syncVisibility();
+  refreshKeyStatus();
+
+  enabled.addEventListener('change', () => {
+    syncVisibility();
+    callbacks.settingChanged('aiEnabled', enabled.checked);
+  });
+  authSel.addEventListener('change', () => callbacks.settingChanged('aiAuthMode', authSel.value));
+  modelSel.addEventListener('change', () => callbacks.settingChanged('aiModel', modelSel.value));
+  consent.addEventListener('change', () => callbacks.settingChanged('aiConsent', consent.checked));
+
+  document.getElementById('ai-key-save').addEventListener('click', async () => {
+    const key = keyInput.value.trim();
+    if (!key) return;
+    const ok = await window.tsuminiwa.ai.setKey(key);
+    keyInput.value = '';
+    showToast(t(ok ? 'ai.keySaved' : 'ai.keySaveFail'));
+    refreshKeyStatus();
+  });
+  document.getElementById('ai-key-clear').addEventListener('click', async () => {
+    await window.tsuminiwa.ai.clearKey();
+    showToast(t('ai.keyCleared'));
+    refreshKeyStatus();
+  });
+  document.getElementById('ai-test').addEventListener('click', async () => {
+    if (!(await window.tsuminiwa.ai.hasKey())) return showToast(t('ai.needKey'));
+    const r = await window.tsuminiwa.ai.test({ authMode: authSel.value, model: modelSel.value });
+    showToast(r.ok ? t('ai.testOk') : t('ai.testFail', { error: r.error || '' }));
+  });
 }
 
 // フォーカスが外れてしばらくしたらUIをフェードアウトする(箱庭だけ残る)

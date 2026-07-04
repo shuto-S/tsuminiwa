@@ -118,6 +118,39 @@
       </div>
       <div class="row"><span data-i18n="settings.roster">むらの なかまたち</span></div>
       <div id="roster"></div>
+
+      <hr class="sep" />
+      <div class="row">
+        <span data-i18n="settings.aiSection">AI(β)</span>
+      </div>
+      <div class="row">
+        <span data-i18n="settings.aiEnabled">AIフレーバー生成をつかう</span>
+        <input type="checkbox" id="opt-ai-enabled" />
+      </div>
+      <div id="ai-config" class="hidden">
+        <label>
+          <span data-i18n="settings.aiAuthMode">認証方式</span>
+          <select id="opt-ai-auth"></select>
+        </label>
+        <label>
+          <span data-i18n="settings.aiModel">モデル</span>
+          <select id="opt-ai-model"></select>
+        </label>
+        <label>
+          <span><span data-i18n="settings.aiKey">APIキー</span> <b id="ai-key-status"></b></span>
+          <input type="password" id="ai-key-input" autocomplete="off" />
+        </label>
+        <div class="row ai-buttons">
+          <button id="ai-key-save" data-i18n="settings.aiKeySave">保存</button>
+          <button id="ai-key-clear" data-i18n="settings.aiKeyClear">消去</button>
+          <button id="ai-test" data-i18n="settings.aiTest">接続テスト</button>
+        </div>
+        <div class="row">
+          <span data-i18n="settings.aiConsent">世界の状態を外部AIに送ることに同意する</span>
+          <input type="checkbox" id="opt-ai-consent" />
+        </div>
+        <p class="note" data-i18n="settings.aiNote">AIはオプトインです。</p>
+      </div>
       <div class="row">
         <button id="btn-reset" class="danger" data-i18n="settings.reset">世界をつくりなおす</button>
       </div>

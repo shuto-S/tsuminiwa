@@ -72,4 +72,12 @@ export const DEFAULT_SETTINGS = {
   weatherInterval: 60, // 天気が変わる間隔(秒)
   dayNight: true, // 昼夜サイクル
   dayLength: 360, // 1日の長さ(秒)
+  // ---- AI(Gemini)。既定オフ・完全オプトイン。キーは safeStorage に別保存 ----
+  aiEnabled: false, // AI フレーバー生成を使う
+  aiAuthMode: 'developer', // 'developer'(AI Studio) / 'vertex-express'(Vertex Express)
+  aiModel: 'gemini-2.5-flash', // 生成モデル
+  aiConsent: false, // 世界の状態を外部APIに送ることへの同意
 };
+
+// AI で選べるモデル(表示は設定の select に並ぶ)
+export const AI_MODELS = ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash'];
