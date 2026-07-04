@@ -15,6 +15,7 @@ export const ja = {
   'tip.season': '{name}・{day}日め',
   'tip.place': '{name}を置く',
   'tip.erase': 'ブロックをこわす(右クリックでも可)',
+  'tip.none': 'なにもしない(見るだけ)',
   'tip.spawnVillager': 'ひとを追加',
   'tip.spawnSheep': 'ひつじを追加',
   'tip.spawnChicken': 'にわとりを追加',

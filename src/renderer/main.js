@@ -372,6 +372,11 @@ async function main() {
       hovered = view.pick(event.clientX, event.clientY);
       return;
     }
+    // 「なにもしない」モードは見るだけ(左右クリックとも置かない・こわさない)
+    if (state.tool === 'none') {
+      hovered = view.pick(event.clientX, event.clientY);
+      return;
+    }
     const column = view.pick(event.clientX, event.clientY);
     if (!column) return;
     const remove = event.button === 2 || state.tool === 'erase';

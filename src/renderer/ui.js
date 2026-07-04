@@ -17,9 +17,23 @@ export function setupUI(callbacks, state) {
   // パレットのツールチップは言語切替で引き直せるよう関数にまとめる
   const refreshPaletteTips = () => {
     for (const [key, el] of swatches) {
-      el.dataset.tip = key === 'erase' ? t('tip.erase') : t('tip.place', { name: t(`block.${key}`) });
+      el.dataset.tip =
+        key === 'none'
+          ? t('tip.none')
+          : key === 'erase'
+            ? t('tip.erase')
+            : t('tip.place', { name: t(`block.${key}`) });
     }
   };
+
+  // いちばん左は「なにもしない(見るだけ)」モード
+  const none = document.createElement('div');
+  none.className = 'swatch';
+  none.style.background = 'rgba(255,255,255,0.15)';
+  none.textContent = '🖐';
+  none.addEventListener('click', () => select('none'));
+  palette.appendChild(none);
+  swatches.set('none', none);
 
   for (const [key, def] of Object.entries(BLOCK_TYPES)) {
     const el = document.createElement('div');

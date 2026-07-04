@@ -15,6 +15,7 @@ export const en = {
   'tip.season': '{name}, day {day}',
   'tip.place': 'Place {name}',
   'tip.erase': 'Break a block (or right-click)',
+  'tip.none': 'Do nothing (just look)',
   'tip.spawnVillager': 'Add a person',
   'tip.spawnSheep': 'Add a sheep',
   'tip.spawnChicken': 'Add a chicken',
