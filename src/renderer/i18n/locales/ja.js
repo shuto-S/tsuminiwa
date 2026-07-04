@@ -83,7 +83,7 @@ export const ja = {
   'shot.save': '💾 保存',
   'shot.share': '𝕏 シェア',
   'shot.close': 'とじる',
-  'shot.saved': '📷 ピクチャの「つみにわ」に保存した',
+  'shot.saved': '📷 保存した',
   'shot.saveFail': '📷 保存できなかった…',
   'shot.shared': '🖼 画像をコピーした! Xの投稿に ⌘V で貼ってね',
   'shot.shareFail': 'シェアできなかった…',

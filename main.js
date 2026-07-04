@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, screen, clipboard, nativeImage, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, screen, clipboard, nativeImage, shell } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const ai = require('./ai/main-service.js');
@@ -74,17 +74,19 @@ function pngBuffer(dataUrl) {
   return Buffer.from(dataUrl.split(',')[1], 'base64');
 }
 
-// スクリーンショットをピクチャ/つみにわ に保存
+// スクリーンショットを保存。保存先は macOS 標準の保存ダイアログで毎回選んでもらう
 ipcMain.handle('shot:save', async (_event, dataUrl) => {
   try {
-    const dir = path.join(app.getPath('pictures'), 'つみにわ');
-    await fs.promises.mkdir(dir, { recursive: true });
     const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-    const file = path.join(dir, `tsuminiwa-${stamp}.png`);
-    await fs.promises.writeFile(file, pngBuffer(dataUrl));
-    return file;
+    const { canceled, filePath } = await dialog.showSaveDialog(win ?? undefined, {
+      defaultPath: path.join(app.getPath('pictures'), `tsuminiwa-${stamp}.png`),
+      filters: [{ name: 'PNG', extensions: ['png'] }],
+    });
+    if (canceled || !filePath) return { canceled: true };
+    await fs.promises.writeFile(filePath, pngBuffer(dataUrl));
+    return { ok: true, path: filePath };
   } catch {
-    return null;
+    return { ok: false };
   }
 });
 

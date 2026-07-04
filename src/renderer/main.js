@@ -289,8 +289,9 @@ async function main() {
       getRoster: () => characters.roster(),
       capture: () => view.captureDataUrl(),
       saveShot: async (dataUrl) => {
-        const file = await window.tsuminiwa.saveScreenshot(dataUrl);
-        showToast(t(file ? 'shot.saved' : 'shot.saveFail'));
+        const res = await window.tsuminiwa.saveScreenshot(dataUrl);
+        if (res && res.canceled) return; // 保存ダイアログをキャンセル → 何も出さない
+        showToast(t(res && res.ok ? 'shot.saved' : 'shot.saveFail'));
       },
       shareShot: async (dataUrl) => {
         const ok = await window.tsuminiwa.shareToX(dataUrl);

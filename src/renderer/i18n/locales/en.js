@@ -83,7 +83,7 @@ export const en = {
   'shot.save': '💾 Save',
   'shot.share': '𝕏 Share',
   'shot.close': 'Close',
-  'shot.saved': '📷 Saved to Pictures/Tsuminiwa',
+  'shot.saved': '📷 Saved',
   'shot.saveFail': '📷 Could not save…',
   'shot.shared': '🖼 Image copied! Paste it into your X post with ⌘V',
   'shot.shareFail': 'Could not share…',
