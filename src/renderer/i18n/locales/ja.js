@@ -62,6 +62,11 @@ export const ja = {
   'ai.keyCleared': '🔑 キーを消去した',
   'ai.needKey': '⚠️ 先にAPIキーを保存してください',
   'ai.needConsent': '⚠️ 送信への同意が必要です',
+  'settings.aiWorldgen': 'ことばで世界をつくる',
+  'settings.aiWorldgenGo': 'つくる',
+  'ai.worldgenMaking': '🌏 世界を思い描いている…',
+  'ai.worldgenDone': '🌏 あたらしい世界ができた',
+  'ai.worldgenFail': '⚠️ うまくいかなかった',
 
   'settings.spawn': 'なかまを増やす',
   'settings.roster': 'むらの なかまたち',

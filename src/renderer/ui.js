@@ -260,6 +260,19 @@ function setupAiSettings(callbacks, state) {
     const r = await window.tsuminiwa.ai.test({ authMode: authSel.value, model: modelSel.value });
     showToast(r.ok ? t('ai.testOk') : t('ai.testFail', { error: r.error || '' }));
   });
+
+  // ことばで世界をつくる(#3)
+  const wgInput = document.getElementById('ai-worldgen-input');
+  const runWorldgen = () => {
+    const instruction = wgInput.value.trim();
+    if (!instruction || !callbacks.worldgen) return;
+    wgInput.value = '';
+    callbacks.worldgen(instruction);
+  };
+  document.getElementById('ai-worldgen-go').addEventListener('click', runWorldgen);
+  wgInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') runWorldgen();
+  });
 }
 
 // フォーカスが外れてしばらくしたらUIをフェードアウトする(箱庭だけ残る)

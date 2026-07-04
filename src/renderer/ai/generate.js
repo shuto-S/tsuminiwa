@@ -7,10 +7,13 @@ import {
   taleRequest,
   chronicleRequest,
   namesRequest,
+  worldgenRequest,
   cleanLine,
   parseNameList,
+  parseParams,
 } from './flavor.js';
-import { describeEvent } from './registry.js';
+import { describeEvent, describeBlocks } from './registry.js';
+import { WORLDGEN_PARAMS, worldgenSchema, clampParams } from '../worldgen-schema.js';
 
 export async function generateMutter(client, ctx) {
   return cleanLine(await client.generate(mutterRequest(ctx)));
@@ -29,6 +32,21 @@ export async function generateTale(client, ctx) {
 export async function generateChronicle(client, events, ctx) {
   if (!events || events.length === 0) return null;
   return cleanLine(await client.generate(chronicleRequest(events, ctx)), 70);
+}
+
+// ことばで世界生成: 指示から地形パラメータを作り、クランプして返す(失敗時は null)
+export async function generateWorldParams(client, instruction, ctx) {
+  const paramDocs = Object.entries(WORLDGEN_PARAMS).map(([key, d]) => ({ key, ...d }));
+  const text = await client.generate(
+    worldgenRequest(instruction, {
+      lang: ctx.lang,
+      blocks: describeBlocks(),
+      paramDocs,
+      schema: worldgenSchema(),
+    })
+  );
+  const raw = parseParams(text);
+  return raw ? clampParams(raw) : null;
 }
 
 // 名前プールを補充して、追加した名前の配列を返す(失敗時は空配列)

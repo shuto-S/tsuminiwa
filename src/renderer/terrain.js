@@ -20,21 +20,30 @@ function makeNoise(cols, rows) {
   };
 }
 
-export function generateWorld(cols, rows, maxHeight) {
+// params(任意): worldgen-schema の値。無ければ既定で従来どおりの生成。
+export function generateWorld(cols, rows, maxHeight, params = null) {
   const world = new World(cols, rows, maxHeight);
   const noise = makeNoise(cols, rows);
+
+  // 既定値(params 無しなら従来と同じ挙動)
+  const waterLevel = params ? params.waterLevel : 0.22;
+  const hilliness = params ? params.hilliness : 1;
+  const sandBand = (params ? params.sandiness : 0.08) + waterLevel;
+  const treeMul = params ? params.treeDensity : 1;
+  const flowerMul = params ? params.flowerDensity : 1;
 
   for (const [col, row] of world.columns()) {
     const v = noise(col, row);
     const stack = world.stackAt(col, row);
-    if (v < 0.22) {
+    if (v < waterLevel) {
       // 池
       stack.push('sand', 'water');
-    } else if (v < 0.3) {
+    } else if (v < sandBand) {
       // 砂浜
       stack.push('sand', 'sand');
     } else {
-      const height = Math.min(maxHeight - 3, 2 + Math.round((v - 0.3) * 5));
+      const raw = 2 + Math.round((v - sandBand) * 5 * hilliness);
+      const height = Math.max(2, Math.min(maxHeight - 3, raw));
       for (let y = 0; y < height - 1; y++) {
         stack.push(y < height - 2 ? 'stone' : 'dirt');
       }
@@ -42,17 +51,27 @@ export function generateWorld(cols, rows, maxHeight) {
     }
   }
 
-  // 最初の木と花を少しだけ
+  // 最初の木と花(密度は params で調整)
   const grassColumns = [...world.columns()].filter(([c, r]) => world.topType(c, r) === 'grass');
   shuffle(grassColumns);
-  const treeCount = Math.max(2, Math.round((cols * rows) / 60));
+  const treeCount = Math.round(Math.max(2, (cols * rows) / 60) * treeMul);
   for (let i = 0; i < treeCount && i < grassColumns.length; i++) {
     plantTree(world, grassColumns[i][0], grassColumns[i][1]);
   }
-  for (let i = treeCount; i < treeCount + 4 && i < grassColumns.length; i++) {
+  const flowerCount = Math.round(4 * flowerMul);
+  for (let i = treeCount; i < treeCount + flowerCount && i < grassColumns.length; i++) {
     const [c, r] = grassColumns[i];
     // 木が生えて樹冠になったマスには咲かせない
     if (world.topType(c, r) === 'grass') world.addFlower(c, r);
+  }
+
+  // 雪化粧(params.snow の割合だけ、地表を雪に)
+  const snow = params ? params.snow : 0;
+  if (snow > 0) {
+    for (const [c, r] of world.columns()) {
+      const top = world.topType(c, r);
+      if (top && top !== 'water' && Math.random() < snow) world.placeTop(c, r, 'snow');
+    }
   }
 
   world.version++;

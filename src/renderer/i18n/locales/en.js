@@ -62,6 +62,11 @@ export const en = {
   'ai.keyCleared': '🔑 Key cleared',
   'ai.needKey': '⚠️ Save an API key first',
   'ai.needConsent': '⚠️ Consent to sending is required',
+  'settings.aiWorldgen': 'Make a world from words',
+  'settings.aiWorldgenGo': 'Create',
+  'ai.worldgenMaking': '🌏 Imagining a world…',
+  'ai.worldgenDone': '🌏 A new world is ready',
+  'ai.worldgenFail': '⚠️ That did not work',
 
   'settings.spawn': 'Add friends',
   'settings.roster': 'Villagers',

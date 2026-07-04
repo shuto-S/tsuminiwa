@@ -99,6 +99,22 @@ test('treeRemovalPlan: 地面に接した樹冠の葉も取りこぼさない', 
   assert.equal(world.stackAt(nc, nr).includes('leaves'), false);
 });
 
+test('generateWorld: params付きでも全マスに地形があり高さ上限を守る', () => {
+  const params = { waterLevel: 0.5, hilliness: 1.8, treeDensity: 2, flowerDensity: 3, snow: 0.3, sandiness: 0.1 };
+  const world = generateWorld(15, 15, 8, params);
+  for (const [c, r] of world.columns()) {
+    const h = world.heightAt(c, r);
+    assert.ok(h >= 1 && h <= 8, `(${c},${r}) 高さ ${h}`);
+  }
+  // 水多め設定なら水マスが存在する
+  assert.ok(world.topsOfType('water').length > 0);
+});
+
+test('generateWorld: params無しは従来と同じ経路(例外なく生成)', () => {
+  const world = generateWorld(11, 11, 8);
+  assert.equal([...world.columns()].length, 121);
+});
+
 test('shuffle: 要素が保存される', () => {
   const array = [1, 2, 3, 4, 5, 6, 7];
   const shuffled = shuffle([...array]);

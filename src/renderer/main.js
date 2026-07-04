@@ -20,6 +20,7 @@ import {
   generatePoem,
   generateTale,
   generateChronicle,
+  generateWorldParams,
   refillNamePool,
 } from './ai/generate.js';
 
@@ -308,26 +309,41 @@ async function main() {
         if (key === 'autoLaunch') window.tsuminiwa.setAutoLaunch(value);
         scheduleSave();
       },
-      regenerate: (size, maxHeight) => {
-        state.gridSize = size;
-        state.maxHeight = maxHeight;
-        world = generateWorld(size, size, maxHeight);
-        view.setWorld(world);
-        characters.setWorld(world);
-        autopilot.setWorld(world);
-        weather.setWorld(world);
-        waterSim.setWorld(world);
-        aging.setWorld(world);
-        critters.setWorld(world);
-        seasonal.setWorld(world);
-        spawnStarterCharacters(characters);
-        applySeason(false);
-        renderedVersion = -1; // 新しい世界を必ず描き直す
-        scheduleSave();
+      regenerate: (size, maxHeight) => rebuildWorld(size, maxHeight),
+      // ことばで世界をつくる(#3): AI無効/失敗時は何もしない(従来の世界は保たれる)
+      worldgen: async (instruction) => {
+        if (!ai.available()) return;
+        showToast(t('ai.worldgenMaking'));
+        const params = await generateWorldParams(ai, instruction, { lang: getLanguage() });
+        if (params) {
+          rebuildWorld(state.gridSize, state.maxHeight, params);
+          showToast(t('ai.worldgenDone'));
+        } else {
+          showToast(t('ai.worldgenFail'));
+        }
       },
     },
     state
   );
+
+  // 世界を作り直す共通処理(手動リセット・ことばで世界生成の両方から)
+  function rebuildWorld(size, maxHeight, params = null) {
+    state.gridSize = size;
+    state.maxHeight = maxHeight;
+    world = generateWorld(size, size, maxHeight, params);
+    view.setWorld(world);
+    characters.setWorld(world);
+    autopilot.setWorld(world);
+    weather.setWorld(world);
+    waterSim.setWorld(world);
+    aging.setWorld(world);
+    critters.setWorld(world);
+    seasonal.setWorld(world);
+    spawnStarterCharacters(characters);
+    applySeason(false);
+    renderedVersion = -1; // 新しい世界を必ず描き直す
+    scheduleSave();
+  }
 
   // ---- 入力 ----
   const canvas = view.renderer.domElement;

@@ -76,6 +76,34 @@ export function namesRequest(type, ctx) {
   return { system, prompt, schema, maxOutputTokens: 120 };
 }
 
+// ことばで世界生成(#3): 自然言語の指示から、地形パラメータ JSON を作らせる。
+// blocks は #5 の describeBlocks() の結果(利用可能ブロックを LLM に知らせる)。
+export function worldgenRequest(instruction, ctx) {
+  const lang = LANG_NAME[ctx.lang] || 'Japanese';
+  const paramDoc = (ctx.paramDocs || [])
+    .map((p) => `${p.key} (${p.min}..${p.max}, default ${p.default}): ${p.desc}`)
+    .join('; ');
+  const blockList = (ctx.blocks || []).map((b) => `${b.key}=${b.desc}`).join('; ');
+  const system =
+    `You configure terrain generation for a cozy hex-block garden game. ` +
+    `Given a request (which may be in ${lang}), output ONLY a JSON object of numeric parameters. ` +
+    `Parameters: ${paramDoc}. ` +
+    `Available blocks (for context): ${blockList}. ` +
+    `Choose values that best match the request. Numbers only, no explanation.`;
+  return { system, prompt: `Request: ${instruction}`, schema: ctx.schema, maxOutputTokens: 200 };
+}
+
+// JSON オブジェクトテキストを安全にパース(失敗時は null)
+export function parseParams(text) {
+  if (!text) return null;
+  try {
+    const v = JSON.parse(text);
+    return v && typeof v === 'object' && !Array.isArray(v) ? v : null;
+  } catch {
+    return null;
+  }
+}
+
 // JSON 配列テキストを安全に配列へ(失敗時は空配列)
 export function parseNameList(text) {
   if (!text) return [];
