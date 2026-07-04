@@ -145,6 +145,24 @@ async function main() {
   characters.onFlavor = onFlavor;
   critters.onEvent = notify;
 
+  // ---- AI命名(#6): 名前プールを背景で補充し、pickName が在庫を優先する ----
+  // プールは AiClient(kind='name:<type>')。同期の spawn を壊さないための仕組み
+  const AI_NAME_TYPES = ['villager', 'sheep', 'chicken'];
+  characters.aiNamePool = { take: (type) => ai.take(`name:${type}`) };
+  let nameRefilling = false;
+  async function refillNamePools() {
+    if (nameRefilling || !ai.available()) return;
+    const low = AI_NAME_TYPES.find((tp) => ai.size(`name:${tp}`) < 2);
+    if (!low) return;
+    nameRefilling = true;
+    try {
+      const text = await ai.generate(namesRequest(low, { season: daynight.season.key, lang: getLanguage() }));
+      ai.fill(`name:${low}`, parseNameList(text));
+    } finally {
+      nameRefilling = false;
+    }
+  }
+
   // 季節の変わり目: 葉と草の色、池の凍結、表示を更新する
   let lastSeasonIndex = -1;
   function applySeason(announce) {
@@ -209,6 +227,8 @@ async function main() {
     );
     if (line) showToast(line);
   }
+
+  let nameRefillTimer = 8; // 起動後まもなく一度、以降は定期的に名前プールを補充
 
   // ときどき訪問者がやってくる(たいてい旅人、たまにしか、まれにねこ)
   let visitorTimer = 90 + Math.random() * 150;
@@ -404,6 +424,11 @@ async function main() {
     seasonal.update(dt);
     updateVisitors(dt);
     updateMutters(dt);
+    nameRefillTimer -= dt;
+    if (nameRefillTimer <= 0) {
+      nameRefillTimer = 45;
+      refillNamePools();
+    }
     characters.update(dt, time, daynight.isNight);
     view.update(dt);
 

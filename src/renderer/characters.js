@@ -407,8 +407,17 @@ export class CharacterManager {
   }
 
   pickName(type) {
-    const pool = namesFor(type);
+    // AI 命名(#6): プールに在庫があれば、まだ使われていない AI 名を優先。
+    // aiNamePool は main が注入する { take(type) }。無ければ従来の名前プールへ。
     const used = new Set(this.characters.map((c) => c.name));
+    if (this.aiNamePool) {
+      for (let i = 0; i < 8; i++) {
+        const n = this.aiNamePool.take(type);
+        if (!n) break;
+        if (!used.has(n)) return n;
+      }
+    }
+    const pool = namesFor(type);
     const free = pool.filter((n) => !used.has(n));
     if (free.length > 0) return free[Math.floor(Math.random() * free.length)];
     return t('name.suffix', { name: pool[Math.floor(Math.random() * pool.length)] });

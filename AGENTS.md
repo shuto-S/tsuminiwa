@@ -63,7 +63,9 @@ src/renderer/
   i18n/index.js            多言語エンジン(t / setLanguage / applyDomTranslations / namesFor)
   i18n/locales/ja.js       日本語辞書(基準)。en.js は英語。LOCALES に足せば言語追加
   ai/client.js             レンダラー側 AI クライアント(オプトイン判定・レート上限・
-                           プール・失敗時 null)。後続のフレーバー機能はここだけ使う
+                           プール・失敗時 null)。フレーバー機能はここだけ使う
+  ai/flavor.js             プロンプト生成の純ロジック(mutter/poem/tale/chronicle/names)
+                           + cleanLine/parseNameList。テスト test/ai-flavor.test.mjs
 ```
 
 このほかリポジトリ直下に `ai/main-service.js`(**メインプロセス側**の Gemini 連携。
@@ -186,6 +188,12 @@ src/renderer/
 - 生成は現在の言語で(プロンプトに言語を渡す)。モデルは設定で選択(AI_MODELS)。
 - パッケージには本番 node_modules を含める(main が `@google/genai` を実行時 require するため、
   package スクリプトで `^/node_modules` を ignore しない)。
+- **フレーバー機能(main.js が配線)**: 住民のつぶやき(updateMutters→characters.speak)、
+  レアに一句/旅人の小話(各システムの `onFlavor?.(kind)` → main の onFlavor)、
+  朝のかわら版(notify で当日イベントを貯め、日付ロールオーバーで chronicle 生成)、
+  AI命名(ai のプール `name:<type>` を背景補充し characters.aiNamePool.take が優先)。
+  すべて ai.available()/ai.generate の null フォールバックで、AI 無効時は従来動作。
+  新しいフレーバーを足すときも「プロンプトは flavor.js の純関数 + main で配線 + null 時は何もしない」。
 
 ### 設定の追加手順
 新しい設定(DEFAULT_SETTINGS のキー)を足すときは4か所:
