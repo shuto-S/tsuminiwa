@@ -42,7 +42,7 @@ function spawnStarterCharacters(characters) {
 
 async function main() {
   const state = {
-    tool: 'grass',
+    tool: 'none', // 起動時は「なにもしない(見るだけ)」
     auto: false,
     gridSize: DEFAULT_COLS,
     maxHeight: DEFAULT_MAX_HEIGHT,

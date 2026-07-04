@@ -73,19 +73,13 @@ export function setupUI(callbacks, state) {
     shotPreview.src = currentShot;
     shotModal.classList.remove('hidden');
   });
+  // 閉じるのは「とじる」ボタンだけ。保存・シェアしてもプレビューは開いたまま
   document.getElementById('shot-close').addEventListener('click', closeShot);
-  shotModal.addEventListener('click', (event) => {
-    if (event.target === shotModal) closeShot(); // 背景クリックでも閉じる
-  });
   document.getElementById('shot-save').addEventListener('click', async () => {
-    const shot = currentShot;
-    closeShot();
-    await callbacks.saveShot(shot);
+    await callbacks.saveShot(currentShot);
   });
   document.getElementById('shot-share').addEventListener('click', async () => {
-    const shot = currentShot;
-    closeShot();
-    await callbacks.shareShot(shot);
+    await callbacks.shareShot(currentShot);
   });
 
   const autoButton = document.getElementById('btn-auto');
