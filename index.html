@@ -16,8 +16,7 @@
         <button id="btn-rotate-left" title="視点を左に60度回す">⟲</button>
         <button id="btn-rotate-right" title="視点を右に60度回す">⟳</button>
         <button id="btn-auto" title="自動発展モード(世界がひとりでに育つ)">🌱</button>
-        <button id="btn-shot" title="スクリーンショットを保存">📷</button>
-        <button id="btn-share" title="Xでシェア(画像はコピーされるので貼り付けてね)">𝕏</button>
+        <button id="btn-shot" title="スクリーンショットを撮る">📷</button>
         <button id="btn-settings" title="設定を開く">⚙</button>
         <button id="btn-quit" title="アプリを終了">✕</button>
       </div>
@@ -25,6 +24,16 @@
     <div id="viewport"></div>
     <div id="palette"></div>
     <div id="hint">左クリック: 置く ／ 右クリック: こわす ／ ホイール: ズーム</div>
+    <div id="shot-modal" class="hidden">
+      <div id="shot-card">
+        <img id="shot-preview" alt="撮れたスクリーンショット" />
+        <div id="shot-actions">
+          <button id="shot-save">💾 保存</button>
+          <button id="shot-share">𝕏 シェア</button>
+          <button id="shot-close">とじる</button>
+        </div>
+      </div>
+    </div>
     <div id="settings-panel" class="hidden">
       <h2>設定</h2>
       <label>

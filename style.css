@@ -168,6 +168,59 @@ button.active {
   opacity: 0;
 }
 
+/* ---- スクショのプレビュー ---- */
+#shot-modal {
+  position: absolute;
+  inset: 0;
+  background: rgba(10, 12, 18, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 30;
+}
+
+#shot-modal.hidden {
+  display: none;
+}
+
+#shot-card {
+  background: rgba(28, 30, 38, 0.95);
+  border-radius: 14px;
+  padding: 12px;
+  max-width: calc(100% - 40px);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+}
+
+#shot-preview {
+  max-width: 100%;
+  max-height: 300px;
+  border-radius: 8px;
+  display: block;
+}
+
+#shot-actions {
+  display: flex;
+  gap: 8px;
+}
+
+#shot-actions button {
+  width: auto;
+  padding: 5px 14px;
+  height: auto;
+  font-size: 12px;
+}
+
+#shot-actions #shot-share {
+  background: rgba(90, 150, 230, 0.4);
+}
+
+#shot-actions #shot-share:hover {
+  background: rgba(90, 150, 230, 0.7);
+}
+
 /* ---- フォーカスが外れたらUIをフェードアウト ---- */
 #topbar,
 #palette,

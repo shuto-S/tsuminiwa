@@ -73,8 +73,7 @@ Requires macOS + Node.js 20+.
 | Scroll wheel | Zoom |
 | ⟲ / ⟳ | Rotate view by 60° |
 | 🌱 | Auto-develop mode |
-| 📷 | Save a screenshot (to Pictures/はこにわ) |
-| 𝕏 | Share to X (image is copied — just paste it) |
+| 📷 | Take a screenshot, preview it, then save or share to X |
 | ⚙ | Settings |
 | Drag the top bar | Move the window |
 

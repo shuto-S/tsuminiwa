@@ -35,8 +35,34 @@ export function setupUI(callbacks, state) {
   document.getElementById('btn-rotate-left').addEventListener('click', () => callbacks.rotate(1));
   document.getElementById('btn-rotate-right').addEventListener('click', () => callbacks.rotate(-1));
   document.getElementById('btn-quit').addEventListener('click', () => callbacks.quit());
-  document.getElementById('btn-shot').addEventListener('click', () => callbacks.screenshot());
-  document.getElementById('btn-share').addEventListener('click', () => callbacks.share());
+  // ---- スクショのプレビュー(撮る → 確認してから保存/シェア) ----
+  const shotModal = document.getElementById('shot-modal');
+  const shotPreview = document.getElementById('shot-preview');
+  let currentShot = null;
+  const closeShot = () => {
+    shotModal.classList.add('hidden');
+    shotPreview.src = '';
+    currentShot = null;
+  };
+  document.getElementById('btn-shot').addEventListener('click', () => {
+    currentShot = callbacks.capture();
+    shotPreview.src = currentShot;
+    shotModal.classList.remove('hidden');
+  });
+  document.getElementById('shot-close').addEventListener('click', closeShot);
+  shotModal.addEventListener('click', (event) => {
+    if (event.target === shotModal) closeShot(); // 背景クリックでも閉じる
+  });
+  document.getElementById('shot-save').addEventListener('click', async () => {
+    const shot = currentShot;
+    closeShot();
+    await callbacks.saveShot(shot);
+  });
+  document.getElementById('shot-share').addEventListener('click', async () => {
+    const shot = currentShot;
+    closeShot();
+    await callbacks.shareShot(shot);
+  });
 
   const autoButton = document.getElementById('btn-auto');
   const syncAutoButton = () => autoButton.classList.toggle('active', state.auto);

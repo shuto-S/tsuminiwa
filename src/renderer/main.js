@@ -166,12 +166,13 @@ async function main() {
         scheduleSave();
       },
       getRoster: () => characters.roster(),
-      screenshot: async () => {
-        const file = await window.hakoniwa.saveScreenshot(view.captureDataUrl());
+      capture: () => view.captureDataUrl(),
+      saveShot: async (dataUrl) => {
+        const file = await window.hakoniwa.saveScreenshot(dataUrl);
         showToast(file ? '📷 ピクチャの「はこにわ」に保存した' : '📷 保存できなかった…');
       },
-      share: async () => {
-        const ok = await window.hakoniwa.shareToX(view.captureDataUrl());
+      shareShot: async (dataUrl) => {
+        const ok = await window.hakoniwa.shareToX(dataUrl);
         showToast(ok ? '🖼 画像をコピーした! Xの投稿に ⌘V で貼ってね' : 'シェアできなかった…');
       },
       settingChanged: (key, value) => {
