@@ -21,6 +21,12 @@ export const en = {
 
   // ---- settings panel ----
   'settings.header': 'Settings',
+  'settings.close': 'Close',
+  'tab.villagers': 'Friends',
+  'tab.world': 'World',
+  'tab.life': 'Life',
+  'tab.app': 'Other',
+  'tab.ai': 'AI',
   'settings.language': 'Language',
   'settings.gridSize': 'Grid size',
   'settings.maxHeight': 'Max height',

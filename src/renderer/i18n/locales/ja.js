@@ -21,6 +21,12 @@ export const ja = {
 
   // ---- 設定パネル ----
   'settings.header': '設定',
+  'settings.close': 'とじる',
+  'tab.villagers': 'なかま',
+  'tab.world': 'せかい',
+  'tab.life': 'くらし',
+  'tab.app': 'その他',
+  'tab.ai': 'AI',
   'settings.language': 'ことば',
   'settings.gridSize': 'マス数',
   'settings.maxHeight': '高さ上限',

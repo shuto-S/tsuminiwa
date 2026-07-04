@@ -96,10 +96,25 @@ export function setupUI(callbacks, state) {
     }
     if (roster.childElementCount === 0) roster.textContent = t('roster.empty');
   };
+  // ---- タブ切り替え ----
+  const tabs = [...panel.querySelectorAll('#settings-tabs .tab')];
+  const panes = [...panel.querySelectorAll('.tab-pane')];
+  const showTab = (name) => {
+    for (const tab of tabs) tab.classList.toggle('active', tab.dataset.tab === name);
+    for (const pane of panes) pane.classList.toggle('active', pane.dataset.pane === name);
+    if (name === 'villagers') renderRoster(); // 「なかま」タブは開くたびに作り直す
+  };
+  for (const tab of tabs) tab.addEventListener('click', () => showTab(tab.dataset.tab));
+
+  const closeSettings = () => panel.classList.add('hidden');
   document.getElementById('btn-settings').addEventListener('click', () => {
+    const opening = panel.classList.contains('hidden');
     panel.classList.toggle('hidden');
-    // 開くたびに「なかま」一覧を作り直す
-    if (!panel.classList.contains('hidden')) renderRoster();
+    if (opening) showTab('villagers'); // 開いたら「なかま」を先頭に
+  });
+  document.getElementById('settings-close').addEventListener('click', closeSettings);
+  panel.addEventListener('click', (event) => {
+    if (event.target === panel) closeSettings(); // 背景クリックで閉じる
   });
 
   const gridSize = document.getElementById('grid-size');
@@ -223,9 +238,17 @@ function setupAiSettings(callbacks, state) {
     modelSel.appendChild(o);
   }
 
+  const keyInputLabel = keyInput.closest('label');
+  const saveBtn = document.getElementById('ai-key-save');
+  const clearBtn = document.getElementById('ai-key-clear');
   const refreshKeyStatus = async () => {
     const has = await window.tsuminiwa.ai.hasKey();
     keyStatus.textContent = t(has ? 'settings.aiKeySaved' : 'settings.aiKeyNone');
+    // 保存済みなら入力欄と保存ボタンを隠し、消去だけ出す。
+    // 未保存なら入力欄と保存ボタンだけ出す(消去は隠す)。
+    if (keyInputLabel) keyInputLabel.classList.toggle('hidden', has);
+    saveBtn.classList.toggle('hidden', has);
+    clearBtn.classList.toggle('hidden', !has);
   };
 
   const syncVisibility = () => aiConfig.classList.toggle('hidden', !enabled.checked);
