@@ -11,6 +11,7 @@ import { WaterSim } from './water.js';
 import { Aging } from './aging.js';
 import { AmbientAudio } from './audio.js';
 import { CritterSystem } from './critters.js';
+import { SeasonalEvents } from './seasonal.js';
 import { setupUI, showToast, setWeatherDisplay, setSeasonDisplay } from './ui.js';
 
 async function loadSave() {
@@ -81,6 +82,8 @@ async function main() {
   const aging = new Aging(world, state.settings);
   aging.onEvent = showToast;
   const critters = new CritterSystem(view.scene, world, weather, daynight, state.settings);
+  const seasonal = new SeasonalEvents(view.scene, world, weather, daynight, state.settings);
+  seasonal.onEvent = showToast;
   const audio = new AmbientAudio(state.settings);
   weather.calendar = daynight;
   autopilot.weather = weather;
@@ -194,6 +197,7 @@ async function main() {
         waterSim.setWorld(world);
         aging.setWorld(world);
         critters.setWorld(world);
+        seasonal.setWorld(world);
         spawnStarterCharacters(characters);
         applySeason(false);
         renderedVersion = -1; // 新しい世界を必ず描き直す
@@ -283,6 +287,7 @@ async function main() {
       campfires: view.campfires.length,
     });
     critters.update(dt);
+    seasonal.update(dt);
     updateVisitors(dt);
     characters.update(dt, time, daynight.isNight);
     view.update(dt);

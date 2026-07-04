@@ -379,10 +379,15 @@ export class CritterSystem {
   }
 
   updateFallingLeaves(dt) {
-    this.fallingLeaves.visible =
-      this.daynight.season.key === 'autumn' &&
-      (this.weather.state === 'sunny' || this.weather.state === 'cloudy');
+    // 季節の舞いもの: 秋は落ち葉、春の日中は桜の花びら
+    const season = this.daynight.season.key;
+    const calm = this.weather.state === 'sunny' || this.weather.state === 'cloudy';
+    let color = null;
+    if (season === 'autumn') color = 0xd07a2e;
+    else if (season === 'spring' && this.daynight.daylight > 0.25) color = 0xf2b3c9;
+    this.fallingLeaves.visible = calm && color !== null;
     if (!this.fallingLeaves.visible) return;
+    this.fallingLeaves.material.color.setHex(color);
     const positions = this.fallingLeaves.geometry.attributes.position.array;
     this.leafData.forEach((leaf, i) => {
       leaf.y -= leaf.speed * dt;

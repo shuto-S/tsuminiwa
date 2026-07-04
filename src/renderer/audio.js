@@ -29,6 +29,7 @@ export class AmbientAudio {
 
     this.rain = this.makeNoiseLayer(1000);
     this.wind = this.makeNoiseLayer(280);
+    this.cicada = this.makeCicadaLayer(); // 夏の昼だけ鳴く
 
     // 単発音(鳥・虫・パチパチ)のバス
     this.chirpBus = ctx.createGain();
@@ -48,6 +49,31 @@ export class AmbientAudio {
     gain.gain.value = 0;
     source.connect(filter).connect(gain).connect(this.master);
     source.start();
+    return gain;
+  }
+
+  // セミの声: バンドパスしたノイズに約100Hzの振幅変調をかけたジーという鳴き
+  makeCicadaLayer() {
+    const ctx = this.ctx;
+    const source = ctx.createBufferSource();
+    source.buffer = this.noiseBuffer;
+    source.loop = true;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.value = 5200;
+    filter.Q.value = 9;
+    const tremolo = ctx.createGain();
+    tremolo.gain.value = 0.5;
+    const lfo = ctx.createOscillator();
+    lfo.frequency.value = 96;
+    const lfoDepth = ctx.createGain();
+    lfoDepth.gain.value = 0.5;
+    lfo.connect(lfoDepth).connect(tremolo.gain);
+    const gain = ctx.createGain();
+    gain.gain.value = 0;
+    source.connect(filter).connect(tremolo).connect(gain).connect(this.master);
+    source.start();
+    lfo.start();
     return gain;
   }
 
@@ -130,6 +156,11 @@ export class AmbientAudio {
     this.lerpGain(this.wind, windTarget, dt);
 
     const calm = w === 'sunny' || w === 'cloudy';
+
+    // セミ: 夏の明るい昼、鳴きの波をつけて
+    const cicadaActive = calm && env.season === 'summer' && env.daylight > 0.35;
+    const wave = 0.6 + 0.4 * Math.sin(performance.now() / 1000 / 2.6);
+    this.lerpGain(this.cicada, cicadaActive ? 0.05 * wave : 0, dt, 0.8);
 
     // 鳥: 明るい昼だけ
     this.birdTimer -= dt;

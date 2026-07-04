@@ -495,21 +495,38 @@ export class SceneView {
     this.renderer.render(this.scene, this.camera);
   }
 
-  // 3Dキャンバスだけを空色の背景に合成してPNGにする(UIは写らない)
-  captureDataUrl() {
-    this.renderer.render(this.scene, this.camera); // 描画直後に読むと preserveDrawingBuffer なしでも取れる
-    const src = this.renderer.domElement;
+  // 3Dキャンバスだけを空色の背景に合成してPNGにする(UIは写らない)。
+  // ウィンドウが小さくても見栄えするよう、一時的に高解像度で描き直す
+  captureDataUrl(targetWidth = 1280) {
+    const canvas = this.renderer.domElement;
+    const aspect = canvas.width / canvas.height;
+    const width = targetWidth;
+    const height = Math.round(targetWidth / aspect);
+
+    const prevPixelRatio = this.renderer.getPixelRatio();
+    const prevSize = new THREE.Vector2();
+    this.renderer.getSize(prevSize);
+    this.renderer.setPixelRatio(1);
+    this.renderer.setSize(width, height, false); // CSSサイズは変えない
+    this.renderer.render(this.scene, this.camera); // 描画直後なら preserveDrawingBuffer なしでも読める
+
     const out = document.createElement('canvas');
-    out.width = src.width;
-    out.height = src.height;
+    out.width = width;
+    out.height = height;
     const ctx = out.getContext('2d');
-    const sky = ctx.createLinearGradient(0, 0, 0, out.height);
+    const sky = ctx.createLinearGradient(0, 0, 0, height);
     sky.addColorStop(0, '#b8d4ea');
     sky.addColorStop(1, '#8ba8c4');
     ctx.fillStyle = sky;
-    ctx.fillRect(0, 0, out.width, out.height);
-    ctx.drawImage(src, 0, 0);
-    return out.toDataURL('image/png');
+    ctx.fillRect(0, 0, width, height);
+    ctx.drawImage(canvas, 0, 0, width, height);
+    const dataUrl = out.toDataURL('image/png');
+
+    // 画面表示用の解像度に戻す
+    this.renderer.setPixelRatio(prevPixelRatio);
+    this.renderer.setSize(prevSize.x, prevSize.y, false);
+    this.renderer.render(this.scene, this.camera);
+    return dataUrl;
   }
 
   // 画面座標からマスを求める。ブロック優先、なければ床平面
