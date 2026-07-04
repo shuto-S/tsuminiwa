@@ -241,14 +241,16 @@ function setupAiSettings(callbacks, state) {
   const keyInputLabel = keyInput.closest('label');
   const saveBtn = document.getElementById('ai-key-save');
   const clearBtn = document.getElementById('ai-key-clear');
+  const testBtn = document.getElementById('ai-test');
   const refreshKeyStatus = async () => {
     const has = await window.tsuminiwa.ai.hasKey();
     keyStatus.textContent = t(has ? 'settings.aiKeySaved' : 'settings.aiKeyNone');
-    // 保存済みなら入力欄と保存ボタンを隠し、消去だけ出す。
-    // 未保存なら入力欄と保存ボタンだけ出す(消去は隠す)。
+    // 保存済みなら入力欄と保存ボタンを隠し、消去・接続テストを出す。
+    // 未保存なら入力欄と保存ボタンだけ出す(消去・接続テストは隠す)。
     if (keyInputLabel) keyInputLabel.classList.toggle('hidden', has);
     saveBtn.classList.toggle('hidden', has);
     clearBtn.classList.toggle('hidden', !has);
+    testBtn.classList.toggle('hidden', !has);
   };
 
   const syncVisibility = () => aiConfig.classList.toggle('hidden', !enabled.checked);

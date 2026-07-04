@@ -9,15 +9,24 @@ const { app, safeStorage } = require('electron');
 
 const KEY_FILE = () => path.join(app.getPath('userData'), 'ai-key.enc');
 
+// safeStorage(Keychain 等)が使えない環境向けの保険。署名なしの dev 起動や
+// キーチェーンにアクセスできない端末では isEncryptionAvailable() が false になり、
+// 暗号化保存ができない。そのときは本人しか読めない権限(0600)で平文保存する。
+// この目印で始まるファイルは平文とみなす。
+const PLAIN_PREFIX = Buffer.from('tsuminiwa-plain:v1\n');
+
 // (authMode + key)ごとにクライアントをキャッシュ(毎回作らない)
 let cached = null; // { authMode, key, client }
 
 function loadKey() {
   try {
+    const buf = fs.readFileSync(KEY_FILE());
+    // 平文フォールバックで保存されたもの
+    if (buf.length >= PLAIN_PREFIX.length && buf.subarray(0, PLAIN_PREFIX.length).equals(PLAIN_PREFIX)) {
+      return buf.subarray(PLAIN_PREFIX.length).toString('utf8') || null;
+    }
     if (!safeStorage.isEncryptionAvailable()) return null;
-    const enc = fs.readFileSync(KEY_FILE());
-    const key = safeStorage.decryptString(enc);
-    return key || null;
+    return safeStorage.decryptString(buf) || null;
   } catch {
     return null;
   }
@@ -25,9 +34,11 @@ function loadKey() {
 
 function storeKey(key) {
   try {
-    if (!safeStorage.isEncryptionAvailable()) return false;
     fs.mkdirSync(path.dirname(KEY_FILE()), { recursive: true });
-    fs.writeFileSync(KEY_FILE(), safeStorage.encryptString(key));
+    const data = safeStorage.isEncryptionAvailable()
+      ? safeStorage.encryptString(key)
+      : Buffer.concat([PLAIN_PREFIX, Buffer.from(key, 'utf8')]); // 端末が暗号化を使えないとき
+    fs.writeFileSync(KEY_FILE(), data, { mode: 0o600 });
     cached = null; // キーが変わったのでクライアントを作り直す
     return true;
   } catch {
