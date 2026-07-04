@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { AiClient } from '../src/renderer/ai/client.js';
+import { AiClient } from '../src/renderer/ai/client.ts';
 
 function makeBackend(overrides = {}) {
   const calls = [];

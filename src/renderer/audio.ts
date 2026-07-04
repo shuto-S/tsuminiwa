@@ -4,8 +4,31 @@
 // - 鳥のさえずり: 昼、短い正弦波のチャープ
 // - 虫の声: 夜、高い正弦波のパルス
 // - たきび: 短いノイズバーストのパチパチ
+import type { Settings, WeatherState, SeasonKey } from './config.ts';
+
+// update() が受け取る環境スナップショット
+interface AudioEnv {
+  weatherState: WeatherState;
+  daylight: number;
+  isNight: boolean;
+  season: SeasonKey;
+  campfires: number;
+}
+
 export class AmbientAudio {
-  constructor(settings) {
+  settings: Settings;
+  ctx: AudioContext | null;
+  birdTimer: number;
+  cricketTimer: number;
+  crackleTimer: number;
+  master!: GainNode;
+  noiseBuffer!: AudioBuffer;
+  rain!: GainNode;
+  wind!: GainNode;
+  cicada!: GainNode;
+  chirpBus!: GainNode;
+
+  constructor(settings: Settings) {
     this.settings = settings;
     this.ctx = null;
     this.birdTimer = 4;
@@ -13,7 +36,7 @@ export class AmbientAudio {
     this.crackleTimer = 0.5;
   }
 
-  ensureContext() {
+  ensureContext(): void {
     if (this.ctx) return;
     this.ctx = new AudioContext();
     const ctx = this.ctx;
@@ -37,8 +60,8 @@ export class AmbientAudio {
     this.chirpBus.connect(this.master);
   }
 
-  makeNoiseLayer(cutoff) {
-    const ctx = this.ctx;
+  makeNoiseLayer(cutoff: number): GainNode {
+    const ctx = this.ctx!;
     const source = ctx.createBufferSource();
     source.buffer = this.noiseBuffer;
     source.loop = true;
@@ -53,8 +76,8 @@ export class AmbientAudio {
   }
 
   // セミの声: バンドパスしたノイズに約100Hzの振幅変調をかけたジーという鳴き
-  makeCicadaLayer() {
-    const ctx = this.ctx;
+  makeCicadaLayer(): GainNode {
+    const ctx = this.ctx!;
     const source = ctx.createBufferSource();
     source.buffer = this.noiseBuffer;
     source.loop = true;
@@ -77,13 +100,13 @@ export class AmbientAudio {
     return gain;
   }
 
-  lerpGain(gain, target, dt, speed = 1.2) {
+  lerpGain(gain: GainNode, target: number, dt: number, speed = 1.2): void {
     gain.gain.value += (target - gain.gain.value) * Math.min(1, dt * speed);
   }
 
   // 鳥のさえずり: 下がり調子のチャープを2〜4回
-  playBirdBurst() {
-    const ctx = this.ctx;
+  playBirdBurst(): void {
+    const ctx = this.ctx!;
     const chirps = 2 + Math.floor(Math.random() * 3);
     const base = 2200 + Math.random() * 1500;
     for (let i = 0; i < chirps; i++) {
@@ -103,8 +126,8 @@ export class AmbientAudio {
   }
 
   // 虫の声: 高い音の短いパルスを3連
-  playCricket() {
-    const ctx = this.ctx;
+  playCricket(): void {
+    const ctx = this.ctx!;
     const freq = 4100 + Math.random() * 400;
     for (let i = 0; i < 3; i++) {
       const t = ctx.currentTime + i * 0.065;
@@ -121,8 +144,8 @@ export class AmbientAudio {
   }
 
   // たきびのパチッ
-  playCrackle() {
-    const ctx = this.ctx;
+  playCrackle(): void {
+    const ctx = this.ctx!;
     const t = ctx.currentTime;
     const source = ctx.createBufferSource();
     source.buffer = this.noiseBuffer;
@@ -140,13 +163,13 @@ export class AmbientAudio {
   }
 
   // env: { weatherState, daylight, isNight, season, campfires }
-  update(dt, env) {
+  update(dt: number, env: AudioEnv): void {
     if (!this.settings.sound) {
       if (this.ctx && this.ctx.state === 'running') this.ctx.suspend();
       return;
     }
     this.ensureContext();
-    if (this.ctx.state === 'suspended') this.ctx.resume();
+    if (this.ctx!.state === 'suspended') this.ctx!.resume();
 
     this.lerpGain(this.master, this.settings.volume * 0.6, dt, 2);
 

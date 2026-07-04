@@ -1,12 +1,23 @@
 // 自己記述する世界モデル(#5)。ゲームロジックが使うのと同じ source から、
 // AI 向けの機械可読な記述(ブロック/イベント/アクション)を生成する。
 // 新要素は「説明を1行足す or 登録するだけ」で AI 側が自動対応できる。
-import { BLOCK_TYPES } from '../config.js';
-import { t } from '../i18n/index.js';
+import { BLOCK_TYPES } from '../config.ts';
+import { t } from '../i18n/index.ts';
+
+interface EventDef {
+  subject: string;
+}
+
+interface ActionDef {
+  key: string;
+  description: string;
+  params?: unknown;
+  execute?: (character: unknown, params: unknown, world: unknown) => unknown;
+}
 
 // ブロックの AI 向け説明(英語1行。表示名は i18n の block.<key> から引く)。
 // 新ブロックを足したらここに1行足すだけでフレーバー/世界生成が扱える。
-const BLOCK_DESC = {
+const BLOCK_DESC: Record<string, string> = {
   grass: 'grassy ground where plants and flowers grow',
   dirt: 'bare earth',
   stone: 'hard rock, for mountains and walls',
@@ -31,11 +42,11 @@ export function describeBlocks() {
 }
 
 // ---- イベント descriptor レジストリ ----
-const events = new Map();
-export function registerEvent(kind, def) {
+const events = new Map<string, EventDef>();
+export function registerEvent(kind: string, def: EventDef) {
   events.set(kind, def);
 }
-export function describeEvent(kind) {
+export function describeEvent(kind: string): EventDef | null {
   return events.get(kind) || null;
 }
 export function listEvents() {
@@ -51,11 +62,11 @@ registerEvent('blacklamb', { subject: 'a rare black lamb born in the village' })
 
 // ---- アクションレジストリ(#4 が使う器) ----
 // def: { key, description, params(JSON schema), execute(character, params, world) }
-const actions = new Map();
-export function registerAction(def) {
+const actions = new Map<string, ActionDef>();
+export function registerAction(def: ActionDef) {
   actions.set(def.key, def);
 }
-export function getAction(key) {
+export function getAction(key: string): ActionDef | null {
   return actions.get(key) || null;
 }
 export function listActions() {

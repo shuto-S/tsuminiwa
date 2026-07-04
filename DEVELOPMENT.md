@@ -24,15 +24,28 @@ npm install
 
 ## コマンド一覧
 
+コードは **TypeScript**。esbuild が型を剥がしてバンドルするので、`npm run build` は
+型チェックしない。型は `npm run typecheck`(`tsc --noEmit`)で別に検査する。
+
 | コマンド | 内容 |
 | --- | --- |
 | `npm start` | バンドル + 開発起動(いちばんよく使う) |
-| `npm run build` | レンダラーを `dist/renderer.js` にバンドルするだけ |
-| `npm run watch` | バンドルの watch モード(別ターミナルで `npx electron .`) |
+| `npm run build` | レンダラーを `dist/renderer.js`、メイン/preload を `dist/main.js`・`dist/preload.js` にバンドル |
+| `npm run typecheck` | `tsc --noEmit` で型を検査(esbuild は型を見ないので必須) |
+| `npm run lint` | ESLint(同名シャドウ・初期化前アクセスなどを検出) |
+| `npm test` | `node --test`(テストは Node ネイティブの型ストリップで `.ts` を直接読む。Node 24+) |
+| `npm run watch` | レンダラーバンドルの watch モード(別ターミナルで `npx electron .`) |
 | `npm run package` | macOS アプリ(`release/つみにわ-darwin-arm64/つみにわ.app`)を生成 |
 
-**注意: レンダラー(`src/renderer/`)を触ったら必ずビルドが必要。**
-`index.html` は `dist/renderer.js` を読むため、ビルドせずに electron を再起動しても反映されない。
+**注意: `src/renderer/`・`main.ts`・`preload.ts` を触ったら必ずビルドが必要。**
+`index.html` は `dist/renderer.js` を、Electron は `dist/main.js`(`package.json` の `main`)を
+読むため、ビルドせずに electron を再起動しても反映されない。
+
+構成メモ:
+- レンダラー: `src/renderer/**/*.ts` → esbuild で `dist/renderer.js`
+- メイン/preload: `main.ts` / `preload.ts`(+ `ai/main-service.ts`)→ esbuild で `dist/*.js`
+- IPC 境界の型は `src/shared/ipc.ts` に集約(preload と renderer が共有)
+- `window.tsuminiwa` の型は `src/renderer/global.d.ts`
 
 ## 開発時のログ確認
 
@@ -72,7 +85,7 @@ git push --tags
 
 ### CI
 
-push / PR ごとに `.github/workflows/ci.yml` が `npm run build` の通過を確認する。
+push / PR ごとに `.github/workflows/ci.yml` が `lint → typecheck → build → test` の通過を確認する。
 
 ## セーブデータ
 

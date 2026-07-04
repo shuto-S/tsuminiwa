@@ -1,21 +1,22 @@
 import * as THREE from 'three';
-import { DEFAULT_COLS, DEFAULT_MAX_HEIGHT, DEFAULT_SETTINGS } from './config.js';
-import { World } from './world.js';
-import { generateWorld } from './terrain.js';
-import { SceneView } from './scene3d.js';
-import { CharacterManager } from './characters.js';
-import { Autopilot } from './autopilot.js';
-import { WeatherSystem } from './weather.js';
-import { DayNight } from './daynight.js';
-import { WaterSim } from './water.js';
-import { Aging } from './aging.js';
-import { AmbientAudio } from './audio.js';
-import { CritterSystem } from './critters.js';
-import { SeasonalEvents } from './seasonal.js';
-import { setupUI, showToast, setWeatherDisplay, setSeasonDisplay } from './ui.js';
-import { t, setLanguage, getLanguage } from './i18n/index.js';
-import { rareEvent } from './events.js';
-import { AiClient } from './ai/client.js';
+import { DEFAULT_COLS, DEFAULT_MAX_HEIGHT, DEFAULT_SETTINGS } from './config.ts';
+import { World } from './world.ts';
+import { generateWorld } from './terrain.ts';
+import type { WorldGenParams } from './terrain.ts';
+import { SceneView } from './scene3d.ts';
+import { CharacterManager } from './characters.ts';
+import { Autopilot } from './autopilot.ts';
+import { WeatherSystem } from './weather.ts';
+import { DayNight } from './daynight.ts';
+import { WaterSim } from './water.ts';
+import { Aging } from './aging.ts';
+import { AmbientAudio } from './audio.ts';
+import { CritterSystem } from './critters.ts';
+import { SeasonalEvents } from './seasonal.ts';
+import { setupUI, showToast, setWeatherDisplay, setSeasonDisplay } from './ui.ts';
+import { t, setLanguage, getLanguage } from './i18n/index.ts';
+import { rareEvent } from './events.ts';
+import { AiClient } from './ai/client.ts';
 import {
   generateMutter,
   generatePoem,
@@ -23,7 +24,7 @@ import {
   generateChronicle,
   generateWorldParams,
   refillNamePool,
-} from './ai/generate.js';
+} from './ai/generate.ts';
 
 async function loadSave() {
   try {
@@ -34,7 +35,7 @@ async function loadSave() {
   }
 }
 
-function spawnStarterCharacters(characters) {
+function spawnStarterCharacters(characters: CharacterManager) {
   characters.spawn('villager');
   characters.spawn('villager');
   characters.spawn('sheep');
@@ -50,8 +51,8 @@ async function main() {
     settings: { ...DEFAULT_SETTINGS },
   };
 
-  let world = null;
-  let savedCharacters = null;
+  let world: World;
+  let savedCharacters: any = null;
 
   const save = await loadSave();
   if (save && save.world) {
@@ -63,10 +64,9 @@ async function main() {
       Object.assign(state.settings, save.settings || {});
       savedCharacters = save.characters;
     } catch {
-      world = null;
+      world = generateWorld(state.gridSize, state.gridSize, state.maxHeight);
     }
-  }
-  if (!world) {
+  } else {
     world = generateWorld(state.gridSize, state.gridSize, state.maxHeight);
   }
 
@@ -81,7 +81,7 @@ async function main() {
   // 実生成はメインプロセス(window.tsuminiwa.ai)へ委譲する
   const ai = new AiClient(state.settings, window.tsuminiwa.ai);
 
-  const viewport = document.getElementById('viewport');
+  const viewport = document.getElementById('viewport')!;
   const view = new SceneView(viewport, world);
   const characters = new CharacterManager(view.scene, world, state.settings);
   const autopilot = new Autopilot(world, characters, state.settings);
@@ -104,8 +104,8 @@ async function main() {
   const waterSim = new WaterSim(world);
   if (save) waterSim.load(save.waterDist);
   // 当日のできごとを貯めておく(朝のかわら版の材料)。通知は notify 経由に集約する
-  const dayEvents = [];
-  function notify(text) {
+  const dayEvents: string[] = [];
+  function notify(text: string) {
     if (dayEvents.length < 30) dayEvents.push(text);
     showToast(text);
   }
@@ -123,7 +123,7 @@ async function main() {
 
   // ---- レアなできごとに AI で一句/小話を添える(#4/#5)。無効・失敗時は何もしない ----
   let flavorBusy = false;
-  async function onFlavor(kind) {
+  async function onFlavor(kind: string) {
     if (flavorBusy || !ai.available()) return;
     // 旅人の小話は半分くらいの確率に絞る(毎回は出さない)
     if (kind === 'travelerleave' && Math.random() < 0.5) return;
@@ -143,7 +143,7 @@ async function main() {
 
   // レアなできごとの発火を一元化: 意味キー → 表示メッセージ(翻訳)＋ AI フレーバー。
   // critters / seasonal はキーを emit するだけで、翻訳関数を持たない(同名シャドウ事故の予防)。
-  function emitRare(key) {
+  function emitRare(key: string) {
     const def = rareEvent(key);
     if (!def) return;
     if (def.message) notify(t(def.message));
@@ -155,7 +155,7 @@ async function main() {
   // ---- AI命名(#6): 名前プールを背景で補充し、pickName が在庫を優先する ----
   // プールは AiClient(kind='name:<type>')。同期の spawn を壊さないための仕組み
   const AI_NAME_TYPES = ['villager', 'sheep', 'chicken'];
-  characters.aiNamePool = { take: (type) => ai.take(`name:${type}`) };
+  characters.aiNamePool = { take: (type: string) => ai.take(`name:${type}`) ?? null };
   let nameRefilling = false;
   async function refillNamePools() {
     if (nameRefilling || !ai.available()) return;
@@ -171,7 +171,7 @@ async function main() {
 
   // 季節の変わり目: 葉と草の色、池の凍結、表示を更新する
   let lastSeasonIndex = -1;
-  function applySeason(announce) {
+  function applySeason(announce: boolean) {
     const season = daynight.season;
     view.seasonColors = { leaves: season.leaves, grass: season.grass };
     world.frozen = season.key === 'winter';
@@ -190,7 +190,7 @@ async function main() {
   // 無効・キー無し・失敗・レート上限時は ai.generate が null を返し、何も出ない(従来どおり)
   let mutterTimer = 20 + Math.random() * 20;
   let muttering = false;
-  async function updateMutters(dt) {
+  async function updateMutters(dt: number) {
     if (muttering || !ai.available()) return;
     mutterTimer -= dt;
     if (mutterTimer > 0) return;
@@ -234,7 +234,7 @@ async function main() {
 
   // ときどき訪問者がやってくる(たいてい旅人、たまにしか、まれにねこ)
   let visitorTimer = 90 + Math.random() * 150;
-  function updateVisitors(dt) {
+  function updateVisitors(dt: number) {
     visitorTimer -= dt;
     if (visitorTimer > 0) return;
     visitorTimer = 180 + Math.random() * 240;
@@ -272,7 +272,7 @@ async function main() {
       waterDist: waterSim.serialize(),
     });
 
-  let saveTimer = null;
+  let saveTimer: ReturnType<typeof setTimeout> | undefined;
   function scheduleSave() {
     clearTimeout(saveTimer);
     saveTimer = setTimeout(() => window.tsuminiwa.saveWorld(snapshot()), 1200);
@@ -281,32 +281,32 @@ async function main() {
   // ---- UI ----
   setupUI(
     {
-      rotate: (steps) => view.rotate(steps),
+      rotate: (steps: number) => view.rotate(steps),
       quit: () => {
         clearTimeout(saveTimer);
         window.tsuminiwa.saveWorld(snapshot()).finally(() => window.tsuminiwa.quit());
       },
-      autoChanged: (enabled) => {
+      autoChanged: (enabled: boolean) => {
         autopilot.enabled = enabled;
         scheduleSave();
       },
-      spawn: (type) => {
+      spawn: (type: string) => {
         characters.spawn(type);
         scheduleSave();
       },
       getRoster: () => characters.roster(),
       capture: () => view.captureDataUrl(),
-      saveShot: async (dataUrl) => {
+      saveShot: async (dataUrl: string) => {
         const res = await window.tsuminiwa.saveScreenshot(dataUrl);
         if (res && res.canceled) return; // 保存ダイアログをキャンセル → 何も出さない
         showToast(t(res && res.ok ? 'shot.saved' : 'shot.saveFail'));
       },
-      shareShot: async (dataUrl) => {
+      shareShot: async (dataUrl: string) => {
         const ok = await window.tsuminiwa.shareToX(dataUrl);
         showToast(t(ok ? 'shot.shared' : 'shot.shareFail'));
       },
-      settingChanged: (key, value) => {
-        state.settings[key] = value;
+      settingChanged: (key: string, value: any) => {
+        (state.settings as Record<string, unknown>)[key] = value;
         if (key === 'language') {
           // 言語を変えたら、動的な表示(天気・季節)も引き直す
           setWeatherDisplay(weather.emoji, weather.state);
@@ -318,15 +318,16 @@ async function main() {
         if (key === 'autoLaunch') window.tsuminiwa.setAutoLaunch(value);
         scheduleSave();
       },
-      regenerate: (size, maxHeight) => rebuildWorld(size, maxHeight),
+      regenerate: (size: number, maxHeight: number) => rebuildWorld(size, maxHeight),
       // ことばで世界をつくる(#3): AI無効/失敗時は何もしない(従来の世界は保たれる)
-      worldgen: async (instruction) => {
+      worldgen: async (instruction: string) => {
         // キーが無いと「思い描いている…→失敗」が毎回チラつくので、先に確認する
         if (!ai.available() || !(await window.tsuminiwa.ai.hasKey())) return;
         showToast(t('ai.worldgenMaking'));
         const params = await generateWorldParams(ai, instruction, { lang: getLanguage() });
         if (params) {
-          rebuildWorld(state.gridSize, state.maxHeight, params);
+          // AI が返した動的パラメータ。clampParams で全キーそろう前提で WorldGenParams として扱う
+          rebuildWorld(state.gridSize, state.maxHeight, params as unknown as WorldGenParams);
           showToast(t('ai.worldgenDone'));
         } else {
           showToast(t('ai.worldgenFail'));
@@ -341,7 +342,7 @@ async function main() {
   let renderedVersion = -1;
 
   // 世界を作り直す共通処理(手動リセット・ことばで世界生成の両方から)
-  function rebuildWorld(size, maxHeight, params = null) {
+  function rebuildWorld(size: number, maxHeight: number, params: WorldGenParams | null = null) {
     state.gridSize = size;
     state.maxHeight = maxHeight;
     world = generateWorld(size, size, maxHeight, params);
@@ -361,7 +362,7 @@ async function main() {
 
   // ---- 入力 ----
   const canvas = view.renderer.domElement;
-  let hovered = null;
+  let hovered: { col: number; row: number } | null = null;
   // フォーカスが外れているときの最初のクリックは「窓を呼び戻すだけ」にして、
   // うっかりブロックを置かないようにする(focus 直後の1クリックだけ無視)
   let refocusGuardUntil = 0;
@@ -424,7 +425,7 @@ async function main() {
   window.addEventListener('blur', () => (windowFocused = false));
   let lastFrameAt = 0;
 
-  function frame(now) {
+  function frame(now: number) {
     if (state.settings.powerSave && !windowFocused && now - lastFrameAt < 95) {
       requestAnimationFrame(frame);
       return;

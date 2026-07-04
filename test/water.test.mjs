@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { World } from '../src/renderer/world.js';
-import { WaterSim } from '../src/renderer/water.js';
+import { World } from '../src/renderer/world.ts';
+import { WaterSim } from '../src/renderer/water.ts';
 
 // 平らな土台の上で水の広がりを調べる
 function flatWorld(height = 1) {

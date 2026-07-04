@@ -1,8 +1,52 @@
 import * as THREE from 'three';
-import { MAX_CHARACTERS } from './config.js';
-import { shuffle, treePlan, treeRemovalPlan, isTreeColumn } from './terrain.js';
-import { MAKERS } from './characterMeshes.js';
-import { t, namesFor } from './i18n/index.js';
+import { MAX_CHARACTERS, type Settings, type SeasonKey } from './config.ts';
+import { shuffle, treePlan, treeRemovalPlan, isTreeColumn } from './terrain.ts';
+import { MAKERS } from './characterMeshes.ts';
+import { t, namesFor } from './i18n/index.ts';
+import type { World, Coord, BlockCell, BlockType } from './world.ts';
+
+// characters.ts 内でだけ使う形（他ファイルは編集しない方針のためローカル定義）
+type Trait = { key: string; speed: number; idle: number };
+type Task = { kind: string; target: number[] };
+type Vec3 = { x: number; y: number; z: number };
+interface CharacterOpts {
+  baby?: boolean;
+  age?: number;
+  name?: string;
+  job?: string | null;
+  trait?: Trait;
+  variant?: string | null;
+  jitter?: number;
+}
+type UpdateCtx = { speed: number; isNight: boolean; festival: boolean };
+interface Egg {
+  col: number;
+  row: number;
+  mesh: THREE.Mesh;
+  t: number;
+}
+interface Bubble {
+  sprite: THREE.Sprite;
+  char: Character;
+  t: number;
+  base: { x: number; y: number };
+  life?: number;
+  ownTexture?: THREE.Texture;
+}
+interface JobStep {
+  col: number;
+  row: number;
+  y: number;
+  type: BlockCell;
+  expect?: BlockType;
+}
+interface Calendar {
+  day: number;
+  season: { key: SeasonKey };
+}
+interface AiNamePool {
+  take(type: string): string | null;
+}
 
 // せいかく: 歩くはやさと、次の行動までの間の個体差。表示は i18n の trait.<key>
 export const TRAITS = [
@@ -39,10 +83,10 @@ const VISITOR_TYPES = new Set(['traveler', 'deer', 'cat']);
 
 // キャラの体はパーツごとに固有のジオメトリ/マテリアルを持つので、
 // シーンから外すときに必ず破棄する(常駐アプリでのGPUリーク防止)
-function disposeMesh(root) {
+function disposeMesh(root: THREE.Object3D) {
   root.traverse((obj) => {
-    if (obj.geometry) obj.geometry.dispose();
-    if (obj.material) obj.material.dispose();
+    if ((obj as THREE.Mesh).geometry) (obj as THREE.Mesh).geometry.dispose();
+    if ((obj as THREE.Mesh).material) ((obj as THREE.Mesh).material as THREE.Material).dispose();
   });
 }
 
@@ -59,12 +103,12 @@ const GREET_COOLDOWN = 90; // 同じ2人が続けてあいさつしない(秒)
 const BUBBLE_LIFE = 1.9;
 const SPEECH_LIFE = 4.2; // AIのつぶやきは長めに出す
 
-const bubbleTextures = new Map();
-function bubbleMaterial(emoji) {
+const bubbleTextures = new Map<string, THREE.CanvasTexture>();
+function bubbleMaterial(emoji: string) {
   if (!bubbleTextures.has(emoji)) {
     const canvas = document.createElement('canvas');
     canvas.width = canvas.height = 64;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d')!;
     ctx.font = '44px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -79,17 +123,17 @@ function bubbleMaterial(emoji) {
 }
 
 // AIのつぶやき用: テキストを角丸の吹き出しに描いたスプライト(都度生成・都度破棄)
-function speechSprite(text) {
+function speechSprite(text: string) {
   const pad = 14;
   const fontPx = 30;
-  const measure = document.createElement('canvas').getContext('2d');
+  const measure = document.createElement('canvas').getContext('2d')!;
   measure.font = `${fontPx}px sans-serif`;
   const w = Math.ceil(measure.measureText(text).width) + pad * 2;
   const h = fontPx + pad * 2;
   const canvas = document.createElement('canvas');
   canvas.width = w;
   canvas.height = h;
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext('2d')!;
   ctx.fillStyle = 'rgba(28,30,38,0.9)';
   const r = 14;
   ctx.beginPath();
@@ -117,7 +161,39 @@ function speechSprite(text) {
 }
 
 class Character {
-  constructor(type, col, row, world, scaleBase, opts = {}) {
+  type: string;
+  col: number;
+  row: number;
+  baby: boolean;
+  age: number;
+  name: string;
+  job: string | null;
+  trait: Trait;
+  variant: string | null;
+  jitter: number;
+  task: Task | null;
+  taskDone: boolean;
+  jobCooldown: number;
+  targetSpot: Coord | null;
+  mesh: THREE.Group;
+  state: string;
+  idleTimer: number;
+  phase: number;
+  progress: number;
+  workDuration: number;
+  from: Vec3 | null;
+  to: Vec3 | null;
+  stepsRemaining: number;
+  done: boolean;
+
+  constructor(
+    type: string,
+    col: number,
+    row: number,
+    world: World,
+    scaleBase: number,
+    opts: CharacterOpts = {}
+  ) {
     this.type = type;
     this.col = col;
     this.row = row;
@@ -132,7 +208,7 @@ class Character {
     this.taskDone = false;
     this.jobCooldown = 15 + Math.random() * 60;
     this.targetSpot = null; // 夜・おまつりに向かう場所
-    this.mesh = MAKERS[type](this);
+    this.mesh = (MAKERS[type as keyof typeof MAKERS] as (c: Character) => THREE.Group)(this);
     this.mesh.scale.setScalar(scaleBase * (this.baby ? BABY_SCALE : 1) * this.jitter);
     this.state = 'idle';
     this.idleTimer = Math.random() * 2;
@@ -152,7 +228,7 @@ class Character {
   }
 
   // ctx: { speed, isNight, festival }
-  update(dt, time, world, ctx) {
+  update(dt: number, time: number, world: World, ctx: UpdateCtx) {
     const speed = ctx.speed * this.trait.speed;
 
     if (this.state === 'sleeping') {
@@ -244,13 +320,13 @@ class Character {
     }
 
     // walking
-    this.progress += (dt * speed) / MOVE_DURATION[this.type];
+    this.progress += (dt * speed) / MOVE_DURATION[this.type as keyof typeof MOVE_DURATION];
     const p = Math.min(1, this.progress);
     const ease = p * p * (3 - 2 * p);
-    this.mesh.position.x = this.from.x + (this.to.x - this.from.x) * ease;
-    this.mesh.position.z = this.from.z + (this.to.z - this.from.z) * ease;
+    this.mesh.position.x = this.from!.x + (this.to!.x - this.from!.x) * ease;
+    this.mesh.position.z = this.from!.z + (this.to!.z - this.from!.z) * ease;
     this.mesh.position.y =
-      this.from.y + (this.to.y - this.from.y) * ease + Math.sin(p * Math.PI) * 0.16;
+      this.from!.y + (this.to!.y - this.from!.y) * ease + Math.sin(p * Math.PI) * 0.16;
     if (p >= 1) {
       this.state = 'idle';
       this.stepsRemaining--;
@@ -262,7 +338,7 @@ class Character {
   }
 
   // 夜: おまつりなら火のまわりへ、ふだんは家へ。動物はその場で眠る
-  nightMove(world, ctx) {
+  nightMove(world: World, ctx: UpdateCtx) {
     if (ctx.festival && this.targetSpot) {
       const [tc, tr] = this.targetSpot;
       if (world.distance(this.col, this.row, tc, tr) <= 1) {
@@ -285,15 +361,15 @@ class Character {
   }
 
   // 昼のしごと: 現場に着いたら作業をはじめる
-  taskMove(world) {
-    const [tc, tr] = this.task.target;
+  taskMove(world: World) {
+    const [tc, tr] = this.task!.target;
     if (world.distance(this.col, this.row, tc, tr) <= 1) {
-      if (this.task.kind === 'fish') {
+      if (this.task!.kind === 'fish') {
         this.state = 'fishing';
         this.workDuration = 12 + Math.random() * 8;
       } else {
         this.state = 'working';
-        this.workDuration = this.task.kind === 'chop' ? 3.5 : 2.2;
+        this.workDuration = this.task!.kind === 'chop' ? 3.5 : 2.2;
       }
       this.progress = 0;
       // 現場のほうを向く
@@ -301,10 +377,10 @@ class Character {
       this.mesh.rotation.y = Math.atan2(p.x - this.mesh.position.x, p.z - this.mesh.position.z);
       return;
     }
-    this.startWalk(world, this.task.target);
+    this.startWalk(world, this.task!.target);
   }
 
-  startWalk(world, target = null) {
+  startWalk(world: World, target: number[] | null = null) {
     // ひつじは足元の草をたまに食べる
     if (this.type === 'sheep' && world.topType(this.col, this.row) === 'grass' && Math.random() < 0.2) {
       this.state = 'eating';
@@ -346,7 +422,27 @@ class Character {
 }
 
 export class CharacterManager {
-  constructor(scene, world, settings) {
+  scene: THREE.Scene;
+  world: World;
+  settings: Settings;
+  characters: Character[];
+  eggs: Egg[];
+  isNight: boolean;
+  onEvent: ((text: string) => void) | null;
+  onFlavor: ((kind: string) => void) | null;
+  calendar: Calendar | null;
+  jobQueue: JobStep[];
+  jobStepTimer: number;
+  festivalActive: boolean;
+  festivalT: number;
+  eggGeo: THREE.SphereGeometry;
+  eggMat: THREE.MeshStandardMaterial;
+  bubbles: Bubble[];
+  greetTimer: number;
+  pairCooldowns: Map<string, number>;
+  aiNamePool: AiNamePool | null;
+
+  constructor(scene: THREE.Scene, world: World, settings: Settings) {
     this.scene = scene;
     this.world = world;
     this.settings = settings;
@@ -367,7 +463,7 @@ export class CharacterManager {
     this.pairCooldowns = new Map(); // "名前|名前" → 最後にあいさつした時刻
   }
 
-  setWorld(world) {
+  setWorld(world: World) {
     this.world = world;
     for (const c of this.characters) {
       this.scene.remove(c.mesh);
@@ -402,11 +498,11 @@ export class CharacterManager {
     }
   }
 
-  scaleOf(character) {
+  scaleOf(character: Character) {
     return this.settings.characterScale * (character.baby ? BABY_SCALE : 1) * character.jitter;
   }
 
-  pickName(type) {
+  pickName(type: string) {
     // AI 命名(#6): プールに在庫があれば、まだ使われていない AI 名を優先。
     // aiNamePool は main が注入する { take(type) }。無ければ従来の名前プールへ。
     const used = new Set(this.characters.map((c) => c.name));
@@ -425,14 +521,14 @@ export class CharacterManager {
 
   // いちばん人数の少ないしごとに就く
   pickJob() {
-    const counts = new Map(JOBS.map((j) => [j, 0]));
+    const counts = new Map(JOBS.map((j): [string, number] => [j, 0]));
     for (const c of this.characters) {
       if (c.type === 'villager' && c.job) counts.set(c.job, (counts.get(c.job) || 0) + 1);
     }
     return [...counts.entries()].sort((a, b) => a[1] - b[1])[0][0];
   }
 
-  spawn(type) {
+  spawn(type: string) {
     if (this.characters.length >= MAX_CHARACTERS) return false;
     const spots = shuffle(this.world.columnsWhere((c, r) => this.world.isWalkable(c, r)));
     if (spots.length === 0) return false;
@@ -440,7 +536,7 @@ export class CharacterManager {
     return this.spawnAt(type, col, row);
   }
 
-  spawnAt(type, col, row, opts = {}) {
+  spawnAt(type: string, col: number, row: number, opts: CharacterOpts = {}) {
     if (this.characters.length >= MAX_CHARACTERS) return null;
     const filled = {
       ...opts,
@@ -459,7 +555,7 @@ export class CharacterManager {
   }
 
   // マップの端から訪問者がやってくる
-  spawnVisitor(type) {
+  spawnVisitor(type: string) {
     const edges = this.world.columnsWhere(
       (c, r) =>
         (c === 0 || r === 0 || c === this.world.cols - 1 || r === this.world.rows - 1) &&
@@ -475,7 +571,7 @@ export class CharacterManager {
   }
 
   // 夜のはじまり: 3日にいちど、火があればおまつり。ふだんは家へ
-  setNight(isNight) {
+  setNight(isNight: boolean) {
     if (isNight === this.isNight) return;
     this.isNight = isNight;
     if (!isNight) {
@@ -493,7 +589,7 @@ export class CharacterManager {
       // 通りすがりの旅人は、出くわしたらそこそこの確率で混ざる
       const animalsJoin = Math.random() < ANIMAL_FESTIVAL_CHANCE;
       const travelerJoins = Math.random() < TRAVELER_FESTIVAL_CHANCE;
-      const joinsFestival = (c) => {
+      const joinsFestival = (c: Character) => {
         if (c.type === 'villager') return true;
         if (c.type === 'traveler') return travelerJoins;
         if (VISITOR_TYPES.has(c.type)) return false; // しか・ねこは混ざらない
@@ -529,7 +625,7 @@ export class CharacterManager {
     }
   }
 
-  update(dt, time, isNight = false) {
+  update(dt: number, time: number, isNight: boolean = false) {
     this.setNight(isNight);
     if (this.festivalActive) {
       this.festivalT -= dt;
@@ -571,7 +667,7 @@ export class CharacterManager {
             traveler: 'event.farewellTraveler',
             deer: 'event.farewellDeer',
             cat: 'event.farewellCat',
-          }[c.type];
+          }[c.type as 'traveler' | 'deer' | 'cat'];
           if (farewell) this.onEvent(t(farewell));
         }
         // 去る旅人はたまに外の世界の小話を置いていく
@@ -580,7 +676,7 @@ export class CharacterManager {
     }
   }
 
-  updateGrowth(dt) {
+  updateGrowth(dt: number) {
     for (const c of this.characters) {
       if (!c.baby) continue;
       c.age += dt;
@@ -592,7 +688,7 @@ export class CharacterManager {
   }
 
   // にわとりはたまに卵を産み、しばらくするとひよこがかえる
-  updateEggs(dt) {
+  updateEggs(dt: number) {
     const chickens = this.characters.filter((c) => c.type === 'chicken' && !c.baby);
     if (
       this.eggs.length < 2 &&
@@ -640,7 +736,7 @@ export class CharacterManager {
   }
 
   // ひつじが2頭以上いると、たまにこひつじがうまれる
-  updateBirths(dt) {
+  updateBirths(dt: number) {
     const sheep = this.characters.filter((c) => c.type === 'sheep' && !c.baby);
     if (sheep.length < 2 || this.characters.length >= MAX_CHARACTERS) return;
     if (Math.random() >= LAMB_RATE * dt) return;
@@ -659,7 +755,7 @@ export class CharacterManager {
 
   // ---- あいさつ ----
   // 近くにいるキャラ同士が、たまに向き合ってあいさつする
-  updateGreetings(dt, time, isNight) {
+  updateGreetings(dt: number, time: number, isNight: boolean) {
     // 吹き出しの追従とフェード(絵文字・テキスト共通)
     for (const bubble of [...this.bubbles]) {
       bubble.t += dt;
@@ -701,7 +797,7 @@ export class CharacterManager {
     }
   }
 
-  startGreeting(a, b) {
+  startGreeting(a: Character, b: Character) {
     for (const [me, other] of [[a, b], [b, a]]) {
       const p = this.world.positionOf(other.col, other.row);
       me.mesh.rotation.y = Math.atan2(p.x - me.mesh.position.x, p.z - me.mesh.position.z);
@@ -709,11 +805,11 @@ export class CharacterManager {
       me.state = 'greeting';
       me.progress = 0;
     }
-    this.addBubble(a, GREET_EMOJI[a.type]);
-    if (Math.random() < 0.6) this.addBubble(b, GREET_EMOJI[b.type]);
+    this.addBubble(a, GREET_EMOJI[a.type as keyof typeof GREET_EMOJI]);
+    if (Math.random() < 0.6) this.addBubble(b, GREET_EMOJI[b.type as keyof typeof GREET_EMOJI]);
   }
 
-  addBubble(char, emoji) {
+  addBubble(char: Character, emoji: string) {
     const sprite = new THREE.Sprite(bubbleMaterial(emoji));
     sprite.scale.setScalar(0.01);
     this.scene.add(sprite);
@@ -721,7 +817,7 @@ export class CharacterManager {
   }
 
   // AIのつぶやきをテキスト吹き出しで出す(char は randomIdleVillager 等で得る)
-  speak(char, text) {
+  speak(char: Character | null, text: string) {
     if (!char || !text) return;
     const sprite = speechSprite(text);
     const base = { x: sprite.scale.x, y: sprite.scale.y };
@@ -743,7 +839,7 @@ export class CharacterManager {
     return idle.length ? idle[Math.floor(Math.random() * idle.length)] : null;
   }
 
-  removeBubble(bubble) {
+  removeBubble(bubble: Bubble) {
     this.scene.remove(bubble.sprite);
     bubble.sprite.material.dispose();
     if (bubble.ownTexture) bubble.ownTexture.dispose(); // テキストは専用テクスチャなので破棄
@@ -751,12 +847,12 @@ export class CharacterManager {
   }
 
   // ---- 昼のしごと ----
-  updateJobs(dt, isNight) {
+  updateJobs(dt: number, isNight: boolean) {
     // 伐採・植樹キューを1ブロックずつ反映
     this.jobStepTimer += dt;
     if (this.jobQueue.length > 0 && this.jobStepTimer >= 0.28) {
       this.jobStepTimer = 0;
-      const b = this.jobQueue.shift();
+      const b = this.jobQueue.shift()!;
       // 伐採で消す予定のマスは、まだ元のブロックが残っているときだけ消す
       // (作業中にユーザーが置き換えたものを巻き込まない)
       if (b.expect === undefined || this.world.stackAt(b.col, b.row)[b.y] === b.expect) {
@@ -784,7 +880,7 @@ export class CharacterManager {
     }
   }
 
-  assignTask(c) {
+  assignTask(c: Character) {
     if (c.job === 'lumberjack') {
       if (this.jobQueue.length > 0) return;
       const trunks = this.world.columnsWhere((tc, tr) => isTreeColumn(this.world, tc, tr));
@@ -854,7 +950,7 @@ export class CharacterManager {
     c.jobCooldown = 120; // むらびとはのんびり
   }
 
-  applyTaskEffect(c) {
+  applyTaskEffect(c: Character) {
     const task = c.task;
     if (!task) return;
     const [tc, tr] = task.target;
@@ -925,7 +1021,7 @@ export class CharacterManager {
   }
 
   // 作物は季節のはやさで育つ(冬は育たない)
-  updateCrops(dt) {
+  updateCrops(dt: number) {
     const season = this.calendar ? this.calendar.season.key : 'spring';
     const mult = { spring: 1.2, summer: 1.5, autumn: 0.8, winter: 0 }[season];
     if (mult === 0) return;
@@ -943,13 +1039,13 @@ export class CharacterManager {
   roster() {
     const emoji = { villager: '🧑', sheep: '🐑', chicken: '🐔', traveler: '🚶', deer: '🦌', cat: '🐈' };
     return this.characters.map((c) => {
-      const tags = [];
+      const tags: string[] = [];
       if (c.baby) tags.push(t('tag.baby'));
       if (c.variant === 'black') tags.push(t('tag.black'));
       if (c.job) tags.push(t(`job.${c.job}`));
       tags.push(t(`trait.${c.trait.key}`));
       return t('roster.line', {
-        emoji: emoji[c.type] || '❓',
+        emoji: emoji[c.type as keyof typeof emoji] || '❓',
         name: c.name,
         tags: tags.join(t('roster.sep')),
       });
@@ -973,12 +1069,12 @@ export class CharacterManager {
       }));
   }
 
-  deserialize(list) {
+  deserialize(list: any) {
     for (const item of list || []) {
-      if (MAKERS[item.type] && this.world.inBounds(item.col, item.row)) {
+      if (MAKERS[item.type as keyof typeof MAKERS] && this.world.inBounds(item.col, item.row)) {
         // 旧セーブの日本語ラベルはキーに読み替える
-        const traitKey = LEGACY_TRAIT[item.trait] || item.trait;
-        const job = LEGACY_JOB[item.job] || item.job;
+        const traitKey = LEGACY_TRAIT[item.trait as keyof typeof LEGACY_TRAIT] || item.trait;
+        const job = LEGACY_JOB[item.job as keyof typeof LEGACY_JOB] || item.job;
         this.spawnAt(item.type, item.col, item.row, {
           baby: Boolean(item.baby),
           age: item.age || 0,

@@ -1,9 +1,33 @@
 import * as THREE from 'three';
-import { BLOCK_HEIGHT, HEX_RADIUS } from './config.js';
+import { BLOCK_HEIGHT, HEX_RADIUS } from './config.ts';
+import type { WeatherState } from './config.ts';
 
 const PUDDLE_TOPS = new Set(['grass', 'dirt', 'stone', 'sand', 'ash']);
 const RAINBOW_COLORS = [0xe85a5a, 0xe8a44a, 0xe8d54a, 0x6cc75a, 0x4aa8e8, 0x9a6fd0];
 const RAINBOW_LIFE = 26; // 秒
+
+interface RainDrop {
+  x: number;
+  y: number;
+  z: number;
+  speed: number;
+}
+
+interface SnowFlake {
+  x: number;
+  y: number;
+  z: number;
+  speed: number;
+  phase: number;
+}
+
+interface Puddle {
+  col: number;
+  row: number;
+  mesh: THREE.Mesh;
+  size: number;
+  height: number;
+}
 
 // 天気ごとの光と雲の目標値。表示名は i18n の weather.<state> で引く
 const KINDS = {
@@ -13,7 +37,7 @@ const KINDS = {
   snow: { emoji: '🌨️', sun: 1.0, ambient: 0.8, cloud: 0.7 },
 };
 
-const WEIGHTS = [
+const WEIGHTS: [string, number][] = [
   ['sunny', 0.42],
   ['cloudy', 0.3],
   ['rain', 0.17],
@@ -24,7 +48,33 @@ const RAIN_DROPS = 260;
 const SNOW_FLAKES = 200;
 
 export class WeatherSystem {
-  constructor(view, world, settings, onChange) {
+  view: any;
+  settings: any;
+  onChange: (state: WeatherState, kind: any) => void;
+  state: WeatherState;
+  timer: number;
+  time: number;
+  calendar: any;
+  current: { sun: number; ambient: number };
+  puddleGeo: THREE.CylinderGeometry;
+  puddleMat: THREE.MeshStandardMaterial;
+  group: THREE.Group;
+  world: any;
+  span: number;
+  skyY: number;
+  puddles: Puddle[];
+  puddleTimer: number;
+  rainbowLife: number;
+  rainbow: THREE.Group;
+  rainbowMats: THREE.MeshBasicMaterial[];
+  cloudMaterial: THREE.MeshStandardMaterial;
+  clouds: THREE.Group[];
+  rainData: RainDrop[];
+  rain: THREE.LineSegments;
+  snowData: SnowFlake[];
+  snow: THREE.Points;
+
+  constructor(view: any, world: any, settings: any, onChange: (state: WeatherState, kind: any) => void) {
     this.view = view;
     this.settings = settings;
     this.onChange = onChange;
@@ -54,7 +104,7 @@ export class WeatherSystem {
     return KINDS[this.state].emoji;
   }
 
-  setWorld(world) {
+  setWorld(world: any) {
     this.world = world;
     const spanX = world.cols * HEX_RADIUS * Math.sqrt(3);
     const spanZ = world.rows * HEX_RADIUS * 1.5;
@@ -176,7 +226,7 @@ export class WeatherSystem {
     this.group.add(this.snow);
   }
 
-  set(state) {
+  set(state: WeatherState) {
     if (this.state === state) return;
     const prev = this.state;
     this.state = state;
@@ -188,20 +238,22 @@ export class WeatherSystem {
     this.onChange(state, KINDS[state]);
   }
 
-  pickNext() {
+  pickNext(): WeatherState {
     // 季節ごとの出やすさ(夏は晴れ、冬は雪が多い)
-    const weights = this.calendar ? Object.entries(this.calendar.season.weights) : WEIGHTS;
+    const weights: [string, number][] = this.calendar
+      ? Object.entries(this.calendar.season.weights)
+      : WEIGHTS;
     const options = weights.filter(([kind]) => kind !== this.state);
     const total = options.reduce((sum, [, w]) => sum + w, 0);
     let roll = Math.random() * total;
     for (const [kind, w] of options) {
       roll -= w;
-      if (roll <= 0) return kind;
+      if (roll <= 0) return kind as WeatherState;
     }
     return 'sunny';
   }
 
-  update(dt) {
+  update(dt: number) {
     this.time += dt;
 
     if (!this.settings.weather) {
@@ -233,7 +285,7 @@ export class WeatherSystem {
     this.updateRainbow(dt);
   }
 
-  updateRainbow(dt) {
+  updateRainbow(dt: number) {
     if (!this.settings.skyShows) this.rainbowLife = 0;
     let target = 0;
     if (this.rainbowLife > 0) {
@@ -250,7 +302,7 @@ export class WeatherSystem {
   }
 
   // 雨の日は水たまりができて、あがると乾いていく
-  updatePuddles(dt) {
+  updatePuddles(dt: number) {
     if (this.state === 'rain' && !this.world.frozen && this.puddles.length < 10) {
       this.puddleTimer += dt;
       if (this.puddleTimer > 2.5) {
@@ -279,7 +331,7 @@ export class WeatherSystem {
 
   spawnPuddle() {
     const spots = this.world.columnsWhere(
-      (c, r) =>
+      (c: number, r: number) =>
         PUDDLE_TOPS.has(this.world.topType(c, r)) &&
         !this.puddles.some((p) => p.col === c && p.row === r)
     );
@@ -293,12 +345,12 @@ export class WeatherSystem {
     this.puddles.push({ col, row, mesh, size: 0.05, height: this.world.heightAt(col, row) });
   }
 
-  removePuddle(puddle) {
+  removePuddle(puddle: Puddle) {
     this.group.remove(puddle.mesh);
     this.puddles = this.puddles.filter((p) => p !== puddle);
   }
 
-  updateRain(dt) {
+  updateRain(dt: number) {
     this.rain.visible = this.state === 'rain';
     if (!this.rain.visible) return;
     const positions = this.rain.geometry.attributes.position.array;
@@ -319,7 +371,7 @@ export class WeatherSystem {
     this.rain.geometry.attributes.position.needsUpdate = true;
   }
 
-  updateSnow(dt) {
+  updateSnow(dt: number) {
     this.snow.visible = this.state === 'snow';
     if (!this.snow.visible) return;
     const positions = this.snow.geometry.attributes.position.array;

@@ -8,7 +8,8 @@
 
 - `npm install` → `npm start`(開発起動)/ `npm test`(ユニットテスト)/ `npm run package`(.app 化)。
 - レンダラー(`src/renderer/`)を変えたら **必ず `npm run build`**(`index.html` は `dist/renderer.js` を読む)。
-- 変更の粒度でコミットし、CI(build + test)を緑に保つ。
+- コードは TypeScript。型は `npm run typecheck`(`tsc --noEmit`)で確認(esbuild は型を見ない)。
+- 変更の粒度でコミットし、CI(lint + typecheck + build + test)を緑に保つ。
 
 ## 守るべき不変条件(壊すと回帰)
 
@@ -17,20 +18,20 @@
    1ミリも変わってはいけない。
 2. **世界を変更するメソッドは `world.version++`**。レンダラーのループが version 差分で
    `view.rebuild()` と自動保存を回す。
-3. **ユーザーに見える文字列は必ず `t('key')` 経由**(直書き禁止)。辞書は `src/renderer/i18n/locales/{ja,en}.js`。
+3. **ユーザーに見える文字列は必ず `t('key')` 経由**(直書き禁止)。辞書は `src/renderer/i18n/locales/{ja,en}.ts`。
 4. **新要素は「自己記述層」に登録する**(下記)。イベント種やブロック名をプロンプトに直書きしない。
 5. **Group を作り直す setWorld は `clearGroup()`** を使う(GPUリーク防止)。
 6. メインプロセスへのアクセスは `window.tsuminiwa`(preload)→ IPC 経由のみ(CSP のため)。
 
-## 新要素の足し方(自己記述層 = `src/renderer/ai/registry.js`)
+## 新要素の足し方(自己記述層 = `src/renderer/ai/registry.ts`)
 
 ここが単一の真実の source。これらをすれば、フレーバー(一句)/世界生成/(将来の)エージェントが
 **追加コードなしで**対応する:
 
-- **新ブロック**: `config.js` の `BLOCK_TYPES` に追加 + i18n `block.<key>` + `registry.js` の `BLOCK_DESC` に英語1行。
-- **新イベント/レア**: 発火点で `this.onFlavor?.('<kind>')` を呼び、`registry.js` で `registerEvent('<kind>', { subject })`。
+- **新ブロック**: `config.ts` の `BLOCK_TYPES` に追加 + i18n `block.<key>` + `registry.ts` の `BLOCK_DESC` に英語1行。
+- **新イベント/レア**: 発火点で `this.onFlavor?.('<kind>')` を呼び、`registry.ts` で `registerEvent('<kind>', { subject })`。
 - **新アクション(エージェント用)**: `registerAction({ key, description, params, execute })`。
-- **新設定**: `config.js` DEFAULT_SETTINGS → `index.html` → `ui.js` の bind → 必要なら `main.js` の settingChanged(手順は AGENTS.md)。
+- **新設定**: `config.ts` DEFAULT_SETTINGS → `index.html` → `ui.ts` の bind → 必要なら `main.ts` の settingChanged(手順は AGENTS.md)。
 
 ## テスト
 
@@ -38,7 +39,7 @@
   テストする(`test/ai-generate.test.mjs` / `test/ai-worldgen.test.mjs` のパターン: `mockBackend(reply)`)。
 - world / terrain / water / registry / observe / flavor / client / generate をカバー済み。
 - ロジックを変えたら対応テストを足す。描画・実挙動は `npx electron .` で目視。
-- CI(`.github/workflows/ci.yml`)が push/PR で `npm run build` と `npm test` を回す。
+- CI(`.github/workflows/ci.yml`)が push/PR で `lint → typecheck → build → test` を回す。
 
 ## コミット / PR
 

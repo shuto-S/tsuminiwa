@@ -1,10 +1,56 @@
 import * as THREE from 'three';
-import { BLOCK_HEIGHT, HEX_RADIUS } from './config.js';
-import { clearGroup } from './three-utils.js';
+import { BLOCK_HEIGHT, HEX_RADIUS } from './config.ts';
+import type { Settings } from './config.ts';
+import type { World } from './world.ts';
+import { clearGroup } from './three-utils.ts';
 
 const BUTTERFLY_COLORS = [0xf2a0c0, 0xf2d54e, 0x9ad4f2, 0xd0a0f2];
 
-function basicMesh(geometry, color, opts = {}) {
+interface Anchor {
+  x: number;
+  y: number;
+  z: number;
+}
+interface Butterfly {
+  mesh: THREE.Mesh;
+  anchor: Anchor | null;
+  retarget: number;
+  phase: number;
+}
+interface FireflyDatum {
+  x: number;
+  y: number;
+  z: number;
+  phase: number;
+}
+interface LeafDatum {
+  x: number;
+  y: number;
+  z: number;
+  speed: number;
+  phase: number;
+}
+interface FishJump {
+  x: number;
+  z: number;
+  surfaceY: number;
+  t: number;
+}
+interface DuckMove {
+  col: number;
+  row: number;
+  fx: number;
+  fz: number;
+  tx: number;
+  tz: number;
+  t: number;
+}
+
+function basicMesh(
+  geometry: THREE.BufferGeometry,
+  color: number,
+  opts: Partial<THREE.MeshStandardMaterialParameters> = {}
+): THREE.Mesh {
   return new THREE.Mesh(
     geometry,
     new THREE.MeshStandardMaterial({ color, roughness: 0.8, flatShading: true, ...opts })
@@ -13,7 +59,54 @@ function basicMesh(geometry, color, opts = {}) {
 
 // 眺めて楽しいだけの生き物たち: 鳥の群れ・蝶・池の魚・夜のほたら
 export class CritterSystem {
-  constructor(scene, world, weather, daynight, settings) {
+  scene: THREE.Scene;
+  weather: any;
+  daynight: any;
+  settings: Settings;
+  onRare: ((key: string) => void) | null;
+  group: THREE.Group;
+  time: number;
+  world!: World;
+  span!: number;
+  skyY!: number;
+  showerT!: number;
+
+  whale!: THREE.Group;
+  whaleFlight!: { t: number } | null;
+
+  star!: THREE.Line;
+  starTimer!: number;
+  starFlight!: { life: number } | null;
+
+  birdFlock!: THREE.Group;
+  birds!: THREE.Mesh[];
+  birdTimer!: number;
+
+  butterflies!: Butterfly[];
+
+  fish!: THREE.Mesh;
+  fishTimer!: number;
+  fishJump!: FishJump | null;
+
+  fireflyData!: FireflyDatum[];
+  fireflies!: THREE.Points;
+
+  leafData!: LeafDatum[];
+  fallingLeaves!: THREE.Points;
+
+  duck!: THREE.Group;
+  duckMove!: DuckMove | null;
+  duckTimer!: number;
+  duckCol!: number;
+  duckRow!: number;
+
+  constructor(
+    scene: THREE.Scene,
+    world: World,
+    weather: any,
+    daynight: any,
+    settings: Settings
+  ) {
     this.scene = scene;
     this.weather = weather;
     this.daynight = daynight;
@@ -28,11 +121,11 @@ export class CritterSystem {
   }
 
   // レアなできごとを意味キーで通知(表示メッセージ・AI連携は main の emitRare が担当)
-  emitRare(key) {
+  emitRare(key: string) {
     if (this.onRare) this.onRare(key);
   }
 
-  setWorld(world) {
+  setWorld(world: World) {
     this.world = world;
     const spanX = world.cols * HEX_RADIUS * Math.sqrt(3);
     const spanZ = world.rows * HEX_RADIUS * 1.5;
@@ -76,7 +169,7 @@ export class CritterSystem {
     this.whaleFlight = null;
   }
 
-  updateWhale(dt) {
+  updateWhale(dt: number) {
     if (!this.whaleFlight) {
       const calm = this.weather.state === 'sunny' || this.weather.state === 'cloudy';
       if (!this.settings.skyShows || !calm) return;
@@ -120,7 +213,7 @@ export class CritterSystem {
     this.starFlight = null;
   }
 
-  updateShootingStar(dt) {
+  updateShootingStar(dt: number) {
     // 流星群(超低確率): しばらく星が続けて流れる
     if (this.showerT > 0) this.showerT -= dt;
     const active =
@@ -147,7 +240,8 @@ export class CritterSystem {
     this.starFlight.life -= dt;
     this.star.position.x -= 3.6 * dt;
     this.star.position.y -= 1.8 * dt;
-    this.star.material.opacity = Math.sin(Math.max(0, this.starFlight.life / 0.8) * Math.PI) * 0.9;
+    (this.star.material as THREE.Material).opacity =
+      Math.sin(Math.max(0, this.starFlight.life / 0.8) * Math.PI) * 0.9;
     if (this.starFlight.life <= 0) {
       this.star.visible = false;
       this.starFlight = null;
@@ -171,7 +265,7 @@ export class CritterSystem {
     this.group.add(this.birdFlock);
   }
 
-  updateBirds(dt) {
+  updateBirds(dt: number) {
     if (!this.birdFlock.visible) {
       this.birdTimer -= dt;
       if (this.birdTimer <= 0 && !this.daynight.isNight) {
@@ -209,10 +303,10 @@ export class CritterSystem {
     }
   }
 
-  updateButterflies(dt) {
+  updateButterflies(dt: number) {
     // 季節で数が変わる(夏がいちばん多く、冬はいない)
     const limits = { spring: 4, summer: 5, autumn: 2, winter: 0 };
-    const limit = limits[this.daynight.season.key];
+    const limit = limits[this.daynight.season.key as keyof typeof limits];
     const active = this.weather.state === 'sunny' && this.daynight.daylight > 0.3;
     for (const [i, b] of this.butterflies.entries()) {
       b.mesh.visible = active && i < limit;
@@ -237,10 +331,10 @@ export class CritterSystem {
     }
   }
 
-  pickButterflySpot() {
+  pickButterflySpot(): Anchor | null {
     // 花があれば花のそば、なければ草の上
     const flowers = [...this.world.flowers];
-    let col, row;
+    let col: number, row: number;
     if (flowers.length > 0) {
       [col, row] = flowers[Math.floor(Math.random() * flowers.length)].split(',').map(Number);
     } else {
@@ -261,7 +355,7 @@ export class CritterSystem {
     this.fishJump = null;
   }
 
-  updateFish(dt) {
+  updateFish(dt: number) {
     if (this.world.frozen) {
       // 凍った池では跳ねない
       this.fish.visible = false;
@@ -279,7 +373,7 @@ export class CritterSystem {
       this.fishJump = { x: p.x, z: p.z, surfaceY: this.world.topSurfaceY(col, row), t: 0 };
       // 低確率で金色のさかな
       const golden = Math.random() < 0.05;
-      this.fish.material.color.setHex(golden ? 0xf2c33d : 0xe89a4a);
+      (this.fish.material as THREE.MeshStandardMaterial).color.setHex(golden ? 0xf2c33d : 0xe89a4a);
       if (golden) this.emitRare('goldfish');
       this.fish.visible = true;
       return;
@@ -334,18 +428,19 @@ export class CritterSystem {
     this.group.add(this.fireflies);
   }
 
-  updateFireflies(dt) {
+  updateFireflies(dt: number) {
     // 夏の夜がいちばん多く、冬はいない
     const strengths = { spring: 0.55, summer: 0.95, autumn: 0.55, winter: 0 };
     const active =
       this.daynight.isNight && (this.weather.state === 'sunny' || this.weather.state === 'cloudy');
-    const target = active ? strengths[this.daynight.season.key] : 0;
-    const material = this.fireflies.material;
+    const target = active ? strengths[this.daynight.season.key as keyof typeof strengths] : 0;
+    const material = this.fireflies.material as THREE.PointsMaterial;
     material.opacity += (target - material.opacity) * Math.min(1, dt * 2);
     this.fireflies.visible = material.opacity > 0.02;
     if (!this.fireflies.visible) return;
 
-    const positions = this.fireflies.geometry.attributes.position.array;
+    const positions = (this.fireflies.geometry.attributes.position as THREE.BufferAttribute)
+      .array as Float32Array;
     this.fireflyData.forEach((fly, i) => {
       const t = this.time * 0.5 + fly.phase;
       positions[i * 3] = fly.x + Math.sin(t * 1.3) * 0.4;
@@ -386,17 +481,18 @@ export class CritterSystem {
     this.group.add(this.fallingLeaves);
   }
 
-  updateFallingLeaves(dt) {
+  updateFallingLeaves(dt: number) {
     // 季節の舞いもの: 秋は落ち葉、春の日中は桜の花びら
     const season = this.daynight.season.key;
     const calm = this.weather.state === 'sunny' || this.weather.state === 'cloudy';
-    let color = null;
+    let color: number | null = null;
     if (season === 'autumn') color = 0xd07a2e;
     else if (season === 'spring' && this.daynight.daylight > 0.25) color = 0xf2b3c9;
     this.fallingLeaves.visible = calm && color !== null;
     if (!this.fallingLeaves.visible) return;
-    this.fallingLeaves.material.color.setHex(color);
-    const positions = this.fallingLeaves.geometry.attributes.position.array;
+    (this.fallingLeaves.material as THREE.PointsMaterial).color.setHex(color!);
+    const positions = (this.fallingLeaves.geometry.attributes.position as THREE.BufferAttribute)
+      .array as Float32Array;
     this.leafData.forEach((leaf, i) => {
       leaf.y -= leaf.speed * dt;
       if (leaf.y < 0) {
@@ -433,7 +529,7 @@ export class CritterSystem {
     return this.world.topsOfType('water');
   }
 
-  updateDuck(dt) {
+  updateDuck(dt: number) {
     const ponds = this.waterColumns();
     const active = ponds.length >= 3 && !this.world.frozen;
     // 足元が埋め立てられたら、いったん引き上げて浮かべ直す
@@ -494,7 +590,7 @@ export class CritterSystem {
     this.duck.rotation.y = Math.atan2(to.x - this.duck.position.x, to.z - this.duck.position.z);
   }
 
-  update(dt) {
+  update(dt: number) {
     this.time += dt;
     this.updateBirds(dt);
     this.updateButterflies(dt);

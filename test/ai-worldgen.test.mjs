@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { WORLDGEN_PARAMS, worldgenSchema, clampParams } from '../src/renderer/worldgen-schema.js';
-import { AiClient } from '../src/renderer/ai/client.js';
-import { generateWorldParams } from '../src/renderer/ai/generate.js';
+import { WORLDGEN_PARAMS, worldgenSchema, clampParams } from '../src/renderer/worldgen-schema.ts';
+import { AiClient } from '../src/renderer/ai/client.ts';
+import { generateWorldParams } from '../src/renderer/ai/generate.ts';
 
 function mockBackend(reply) {
   const calls = [];

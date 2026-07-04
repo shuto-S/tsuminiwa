@@ -8,7 +8,12 @@
 // アクセス)で例外になる」たぐいの事故を、構造的に起こせなくする。
 //
 // 新しいレア演出を足すときは、ここに1行足して、発火側で this.emitRare('key') を呼ぶだけ。
-export const RARE_EVENTS = {
+interface RareEventDef {
+  message: string;
+  flavor: string;
+}
+
+export const RARE_EVENTS: Record<string, RareEventDef> = {
   whale: { message: 'event.rareWhale', flavor: 'whale' },
   meteor: { message: 'event.rareMeteor', flavor: 'meteor' },
   goldfish: { message: 'event.rareGoldFish', flavor: 'goldfish' },
@@ -16,6 +21,6 @@ export const RARE_EVENTS = {
 };
 
 // 意味キーからレア定義を引く(未知キーは null)。
-export function rareEvent(key) {
+export function rareEvent(key: string): RareEventDef | null {
   return RARE_EVENTS[key] || null;
 }

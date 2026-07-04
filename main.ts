@@ -1,18 +1,31 @@
-const { app, BrowserWindow, ipcMain, dialog, screen, clipboard, nativeImage, shell } = require('electron');
-const fs = require('fs');
-const path = require('path');
-const ai = require('./ai/main-service.js');
+import {
+  app,
+  BrowserWindow,
+  ipcMain,
+  dialog,
+  screen,
+  clipboard,
+  nativeImage,
+  shell,
+  type IpcMainInvokeEvent,
+  type IpcMainEvent,
+} from 'electron';
+import fs from 'node:fs';
+import path from 'node:path';
+import { storeKey, clearKey, hasKey, testConnection, generate } from './ai/main-service.ts';
+import type { AiAuthMode, AiGenerateOptions } from './src/shared/ipc.ts';
 
-const SHARE_TEXT = 'デスクトップのすみで、ちいさな世界が育っています 🌱 #つみにわ\nhttps://github.com/shuto-S/tsuminiwa';
+const SHARE_TEXT =
+  'デスクトップのすみで、ちいさな世界が育っています 🌱 #つみにわ\nhttps://github.com/shuto-S/tsuminiwa';
 
 const MARGIN = 16;
-let win = null;
+let win: BrowserWindow | null = null;
 
-function savePath() {
+function savePath(): string {
   return path.join(app.getPath('userData'), 'world.json');
 }
 
-function createWindow() {
+function createWindow(): void {
   const { workArea } = screen.getPrimaryDisplay();
   const width = 480;
   const height = 540;
@@ -49,7 +62,7 @@ ipcMain.handle('world:load', async () => {
   }
 });
 
-ipcMain.handle('world:save', async (_event, json) => {
+ipcMain.handle('world:save', async (_event: IpcMainInvokeEvent, json: string) => {
   try {
     await fs.promises.writeFile(savePath(), json, 'utf8');
     return true;
@@ -61,27 +74,35 @@ ipcMain.handle('world:save', async (_event, json) => {
 ipcMain.on('app:quit', () => app.quit());
 
 // ---- AI(Gemini)。キーの保存・接続テスト・生成はすべてメインプロセスで ----
-ipcMain.handle('ai:setKey', (_event, key) => ai.storeKey(key));
+ipcMain.handle('ai:setKey', (_event: IpcMainInvokeEvent, key: string) => storeKey(key));
 ipcMain.handle('ai:clearKey', () => {
-  ai.clearKey();
+  clearKey();
   return true;
 });
-ipcMain.handle('ai:hasKey', () => ai.hasKey());
-ipcMain.handle('ai:test', (_event, opts) => ai.testConnection(opts || {}));
-ipcMain.handle('ai:generate', (_event, opts) => ai.generate(opts || {}));
+ipcMain.handle('ai:hasKey', () => hasKey());
+ipcMain.handle('ai:test', (_event: IpcMainInvokeEvent, opts: { authMode: AiAuthMode; model: string }) =>
+  testConnection(opts || {})
+);
+ipcMain.handle('ai:generate', (_event: IpcMainInvokeEvent, opts: AiGenerateOptions) =>
+  generate(opts || {})
+);
 
-function pngBuffer(dataUrl) {
+function pngBuffer(dataUrl: string): Buffer {
   return Buffer.from(dataUrl.split(',')[1], 'base64');
 }
 
 // スクリーンショットを保存。保存先は macOS 標準の保存ダイアログで毎回選んでもらう
-ipcMain.handle('shot:save', async (_event, dataUrl) => {
+ipcMain.handle('shot:save', async (_event: IpcMainInvokeEvent, dataUrl: string) => {
   try {
     const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-    const { canceled, filePath } = await dialog.showSaveDialog(win ?? undefined, {
+    const dialogOptions = {
       defaultPath: path.join(app.getPath('pictures'), `tsuminiwa-${stamp}.png`),
       filters: [{ name: 'PNG', extensions: ['png'] }],
-    });
+    };
+    // 親ウィンドウがあれば紐づけて表示(なければ単体ダイアログ)
+    const { canceled, filePath } = win
+      ? await dialog.showSaveDialog(win, dialogOptions)
+      : await dialog.showSaveDialog(dialogOptions);
     if (canceled || !filePath) return { canceled: true };
     await fs.promises.writeFile(filePath, pngBuffer(dataUrl));
     return { ok: true, path: filePath };
@@ -92,7 +113,7 @@ ipcMain.handle('shot:save', async (_event, dataUrl) => {
 
 // 画像をクリップボードに入れて、Xの投稿画面を開く
 // (Xのweb intentは画像を添付できないため、貼り付けてもらう方式)
-ipcMain.handle('shot:share', async (_event, dataUrl) => {
+ipcMain.handle('shot:share', async (_event: IpcMainInvokeEvent, dataUrl: string) => {
   try {
     clipboard.writeImage(nativeImage.createFromBuffer(pngBuffer(dataUrl)));
     await shell.openExternal(
@@ -105,11 +126,11 @@ ipcMain.handle('shot:share', async (_event, dataUrl) => {
 });
 
 // ログイン時に自動起動(パッケージ版のみ。開発時はelectron本体を登録してしまうため無視)
-ipcMain.on('app:autolaunch', (_event, enabled) => {
+ipcMain.on('app:autolaunch', (_event: IpcMainEvent, enabled: boolean) => {
   if (app.isPackaged) app.setLoginItemSettings({ openAtLogin: Boolean(enabled) });
 });
 
-ipcMain.on('window:pin', (_event, pinned) => {
+ipcMain.on('window:pin', (_event: IpcMainEvent, pinned: boolean) => {
   if (win) win.setAlwaysOnTop(Boolean(pinned), 'floating');
 });
 

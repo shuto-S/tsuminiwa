@@ -1,3 +1,8 @@
+import type { AiAuthMode } from '../shared/ipc.ts';
+
+// アプリ内言語
+export type Language = 'ja' | 'en';
+
 // 六角柱の寸法(外接円半径と1段の高さ)
 export const HEX_RADIUS = 0.5;
 export const HEX_WIDTH = Math.sqrt(3) * HEX_RADIUS; // 平坦な辺どうしの距離
@@ -8,7 +13,12 @@ export const DEFAULT_MAX_HEIGHT = 8;
 export const MAX_CHARACTERS = 12;
 
 // 表示名は i18n の block.<key> で引く(ここには持たない)
-export const BLOCK_TYPES = {
+export interface BlockDef {
+  color: number;
+  water?: boolean;
+  fire?: boolean;
+}
+export const BLOCK_TYPES: Record<string, BlockDef> = {
   grass: { color: 0x6cc75a },
   dirt: { color: 0x9a6a44 },
   stone: { color: 0xa9a9b0 },
@@ -28,7 +38,18 @@ export const FLOWER_COLORS = [0xf27ea9, 0xf2d54e, 0xffffff, 0xb98aef];
 // 季節。name は i18n の season.<key> で引く。weights は天気の出やすさ、
 // leaves/grass は葉と草の色
 export const DAYS_PER_SEASON = 3;
-export const SEASONS = [
+
+export type WeatherState = 'sunny' | 'cloudy' | 'rain' | 'snow';
+export type SeasonKey = 'spring' | 'summer' | 'autumn' | 'winter';
+export interface Season {
+  key: SeasonKey;
+  emoji: string;
+  leaves: number;
+  grass: number;
+  weights: Record<WeatherState, number>;
+}
+
+export const SEASONS: Season[] = [
   {
     key: 'spring', emoji: '🌸',
     leaves: 0x5fbf63, grass: 0x6cc75a,
@@ -52,7 +73,30 @@ export const SEASONS = [
 ];
 
 // 設定パネルからユーザーが変えられる値
-export const DEFAULT_SETTINGS = {
+export interface Settings {
+  language: Language;
+  characterScale: number;
+  characterSpeed: number;
+  autoSpeed: number;
+  shadows: boolean;
+  pinned: boolean;
+  powerSave: boolean;
+  autoLaunch: boolean;
+  sound: boolean;
+  volume: number;
+  skyShows: boolean;
+  decay: boolean;
+  weather: boolean;
+  weatherInterval: number;
+  dayNight: boolean;
+  dayLength: number;
+  aiEnabled: boolean;
+  aiAuthMode: AiAuthMode;
+  aiModel: string;
+  aiConsent: boolean;
+}
+
+export const DEFAULT_SETTINGS: Settings = {
   language: 'ja', // アプリ内言語(ja / en)
   characterScale: 1.45, // キャラクターの見た目の大きさ
   characterSpeed: 1, // キャラクターの歩く・動き出すはやさ(倍率)
