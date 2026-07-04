@@ -103,17 +103,23 @@ async function main() {
   if (save && typeof save.day === 'number') daynight.day = save.day;
   const waterSim = new WaterSim(world);
   if (save) waterSim.load(save.waterDist);
+  // 当日のできごとを貯めておく(朝のかわら版の材料)。通知は notify 経由に集約する
+  const dayEvents = [];
+  function notify(text) {
+    if (dayEvents.length < 30) dayEvents.push(text);
+    showToast(text);
+  }
   const aging = new Aging(world, state.settings);
-  aging.onEvent = showToast;
+  aging.onEvent = notify;
   const critters = new CritterSystem(view.scene, world, weather, daynight, state.settings);
   const seasonal = new SeasonalEvents(view.scene, world, weather, daynight, state.settings);
-  seasonal.onEvent = showToast;
+  seasonal.onEvent = notify;
   const audio = new AmbientAudio(state.settings);
   weather.calendar = daynight;
   autopilot.weather = weather;
   autopilot.calendar = daynight;
-  autopilot.onEvent = showToast;
-  characters.onEvent = showToast;
+  autopilot.onEvent = notify;
+  characters.onEvent = notify;
   characters.calendar = daynight;
 
   // ---- レアなできごとに AI で一句/小話を添える(#4/#5)。無効・失敗時は何もしない ----
@@ -137,7 +143,7 @@ async function main() {
   critters.onFlavor = onFlavor;
   seasonal.onFlavor = onFlavor;
   characters.onFlavor = onFlavor;
-  critters.onEvent = showToast;
+  critters.onEvent = notify;
 
   // 季節の変わり目: 葉と草の色、池の凍結、表示を更新する
   let lastSeasonIndex = -1;
@@ -190,6 +196,20 @@ async function main() {
     }
   }
 
+  // 朝のかわら版(#3): 日付が変わったら前日のできごとを短い日記にまとめて流す。
+  // AI無効・できごと無し・失敗時は何も出ない(従来どおり)。dayEvents は必ずクリアする
+  async function morningChronicle() {
+    const events = dayEvents.splice(0, dayEvents.length); // 前日ぶんを取り出してクリア
+    if (!ai.available() || events.length === 0) return;
+    const line = cleanLine(
+      await ai.generate(
+        chronicleRequest(events, { day: daynight.day, season: daynight.season.key, lang: getLanguage() })
+      ),
+      70
+    );
+    if (line) showToast(line);
+  }
+
   // ときどき訪問者がやってくる(たいてい旅人、たまにしか、まれにねこ)
   let visitorTimer = 90 + Math.random() * 150;
   function updateVisitors(dt) {
@@ -200,7 +220,7 @@ async function main() {
     const roll = Math.random();
     const type = roll < 0.7 ? 'traveler' : roll < 0.87 ? 'deer' : 'cat';
     if (characters.spawnVisitor(type)) {
-      showToast(
+      notify(
         t(
           {
             traveler: 'event.visitorTraveler',
@@ -369,6 +389,7 @@ async function main() {
     } else if (daynight.day !== lastDay) {
       setSeasonDisplay(daynight.season, daynight.day);
     }
+    if (daynight.day !== lastDay) morningChronicle(); // 朝のかわら版(前日ぶん)
     lastDay = daynight.day;
 
     view.nightGlow = daynight.isNight ? 1 : 0;
