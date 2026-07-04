@@ -99,12 +99,14 @@ macOS (Apple Silicon) + Node.js 20+ が必要です。
 
 ## 🛠 開発
 
+- **開発の進め方・不変条件・貢献手順**: [CONTRIBUTING.md](CONTRIBUTING.md)
 - 手順(セットアップ・リリース・トラブルシューティング): [DEVELOPMENT.md](DEVELOPMENT.md)
 - コード構造と設計(AIエージェント向け): [AGENTS.md](AGENTS.md)
+- 進行中の作業: [Issues](https://github.com/shuto-S/tsuminiwa/issues)(オープンは村人のAIエージェント化)
 
 構成の要点: Electron + Three.js(OrthographicCamera のアイソメ視点、InstancedMesh)、
-odd-r オフセット座標の六角グリッド、esbuild バンドル、依存は実質 `three` のみ。
-環境音は音声ファイルを使わず Web Audio でリアルタイム生成しています。
+odd-r オフセット座標の六角グリッド、esbuild バンドル。環境音は Web Audio でリアルタイム生成。
+AI(Gemini)はオプトインのフレーバー層で、無効時は完全に従来動作。
 
 ## ライセンス
 
