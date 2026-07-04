@@ -20,6 +20,7 @@ export class CritterSystem {
     this.daynight = daynight;
     this.settings = settings;
     this.onEvent = null;
+    this.onFlavor = null; // レアなできごとで AI に一句を頼むフック
     this.group = new THREE.Group();
     scene.add(this.group);
     this.time = 0;
@@ -79,6 +80,7 @@ export class CritterSystem {
       this.whale.visible = true;
       this.whale.position.set(-this.span / 2 - 2.5, this.skyY + 2.2, -this.span * 0.15);
       if (this.onEvent) this.onEvent(t('event.rareWhale'));
+      if (this.onFlavor) this.onFlavor('whale');
       return;
     }
     this.whaleFlight.t += dt / 30; // 30秒かけて横切る
@@ -122,6 +124,7 @@ export class CritterSystem {
     if (active && this.showerT <= 0 && Math.random() < dt / 2400) {
       this.showerT = 25;
       if (this.onEvent) this.onEvent(t('event.rareMeteor'));
+      if (this.onFlavor) this.onFlavor('meteor');
     }
 
     if (!this.starFlight) {
@@ -275,6 +278,7 @@ export class CritterSystem {
       const golden = Math.random() < 0.05;
       this.fish.material.color.setHex(golden ? 0xf2c33d : 0xe89a4a);
       if (golden && this.onEvent) this.onEvent(t('event.rareGoldFish'));
+      if (golden && this.onFlavor) this.onFlavor('goldfish');
       this.fish.visible = true;
       return;
     }

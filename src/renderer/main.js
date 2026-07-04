@@ -15,7 +15,15 @@ import { SeasonalEvents } from './seasonal.js';
 import { setupUI, showToast, setWeatherDisplay, setSeasonDisplay } from './ui.js';
 import { t, setLanguage, getLanguage } from './i18n/index.js';
 import { AiClient } from './ai/client.js';
-import { mutterRequest, cleanLine } from './ai/flavor.js';
+import {
+  mutterRequest,
+  cleanLine,
+  poemRequest,
+  taleRequest,
+  chronicleRequest,
+  namesRequest,
+  parseNameList,
+} from './ai/flavor.js';
 
 async function loadSave() {
   try {
@@ -107,6 +115,28 @@ async function main() {
   autopilot.onEvent = showToast;
   characters.onEvent = showToast;
   characters.calendar = daynight;
+
+  // ---- レアなできごとに AI で一句/小話を添える(#4/#5)。無効・失敗時は何もしない ----
+  let flavorBusy = false;
+  async function onFlavor(kind) {
+    if (flavorBusy || !ai.available()) return;
+    // 旅人の小話は半分くらいの確率に絞る(毎回は出さない)
+    if (kind === 'travelerleave' && Math.random() < 0.5) return;
+    const lang = getLanguage();
+    const season = daynight.season.key;
+    const req =
+      kind === 'travelerleave' ? taleRequest({ season, lang }) : poemRequest(kind, { season, lang });
+    flavorBusy = true;
+    try {
+      const line = cleanLine(await ai.generate(req), 40);
+      if (line) showToast(line);
+    } finally {
+      flavorBusy = false;
+    }
+  }
+  critters.onFlavor = onFlavor;
+  seasonal.onFlavor = onFlavor;
+  characters.onFlavor = onFlavor;
   critters.onEvent = showToast;
 
   // 季節の変わり目: 葉と草の色、池の凍結、表示を更新する

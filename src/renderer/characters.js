@@ -354,6 +354,7 @@ export class CharacterManager {
     this.eggs = [];
     this.isNight = false;
     this.onEvent = null;
+    this.onFlavor = null; // レア(くろいこひつじ)・旅人退場で AI に一句/小話を頼むフック
     this.calendar = null; // main で注入(季節・日数)
     this.jobQueue = []; // きこりの伐採・植樹などを1ブロックずつ反映
     this.jobStepTimer = 0;
@@ -564,6 +565,8 @@ export class CharacterManager {
           }[c.type];
           if (farewell) this.onEvent(t(farewell));
         }
+        // 去る旅人はたまに外の世界の小話を置いていく
+        if (c.type === 'traveler' && this.onFlavor) this.onFlavor('travelerleave');
       }
     }
   }
@@ -635,7 +638,9 @@ export class CharacterManager {
     const parent = sheep[Math.floor(Math.random() * sheep.length)];
     const variant = Math.random() < BLACK_LAMB_CHANCE ? 'black' : null;
     const lamb = this.spawnAt('sheep', parent.col, parent.row, { baby: true, variant });
-    if (!lamb || !this.onEvent) return;
+    if (!lamb) return;
+    if (variant === 'black' && this.onFlavor) this.onFlavor('blacklamb');
+    if (!this.onEvent) return;
     this.onEvent(
       variant === 'black'
         ? t('event.lambBlack', { name: lamb.name })

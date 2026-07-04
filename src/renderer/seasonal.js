@@ -40,6 +40,7 @@ export class SeasonalEvents {
     this.daynight = daynight;
     this.settings = settings;
     this.onEvent = null;
+    this.onFlavor = null; // レアなできごとで AI に一句を頼むフック
     this.time = 0;
     this.group = new THREE.Group();
     scene.add(this.group);
@@ -129,6 +130,7 @@ export class SeasonalEvents {
     if (this.auroraT <= 0 && conditions && Math.random() < dt / 1500) {
       this.auroraT = 45;
       if (this.onEvent) this.onEvent(t('event.rareAurora'));
+      if (this.onFlavor) this.onFlavor('aurora');
     }
     if (this.auroraT > 0) this.auroraT -= dt;
 
