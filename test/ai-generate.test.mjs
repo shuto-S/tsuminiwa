@@ -37,11 +37,22 @@ test('generateMutter: モック応答を整形して返す(引用符・改行を
   assert.match(backend.calls[0].system, /Japanese/);
 });
 
-test('generatePoem: kind ごとにプロンプトが変わり、応答を返す', async () => {
+test('generatePoem: descriptor から題材を引いて生成する', async () => {
   const backend = mockBackend((opts) => (opts.prompt.includes('whale') ? '🐋 はるのそら' : 'x'));
   const c = new AiClient(enabled, backend, noLimit);
   const line = await generatePoem(c, 'whale', { season: 'spring', lang: 'ja' });
   assert.equal(line, '🐋 はるのそら');
+  // whale の subject(#5 レジストリ)がプロンプトに乗っている
+  assert.match(backend.calls[0].prompt, /whale/);
+});
+
+test('generatePoem: 新イベントを registerEvent すれば追加コードなしで一句が出る(#5連動)', async () => {
+  const { registerEvent } = await import('../src/renderer/ai/registry.js');
+  registerEvent('rainbowbird', { subject: 'a rainbow-colored bird passing by' });
+  const backend = mockBackend((opts) => (opts.prompt.includes('rainbow') ? '🌈 とりのうた' : 'x'));
+  const c = new AiClient(enabled, backend, noLimit);
+  const line = await generatePoem(c, 'rainbowbird', { season: 'spring', lang: 'ja' });
+  assert.equal(line, '🌈 とりのうた');
 });
 
 test('generateTale: 応答を返す', async () => {

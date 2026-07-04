@@ -10,13 +10,16 @@ import {
   cleanLine,
   parseNameList,
 } from './flavor.js';
+import { describeEvent } from './registry.js';
 
 export async function generateMutter(client, ctx) {
   return cleanLine(await client.generate(mutterRequest(ctx)));
 }
 
 export async function generatePoem(client, kind, ctx) {
-  return cleanLine(await client.generate(poemRequest(kind, ctx)), 40);
+  // 一句の題材は #5 のイベント descriptor から引く(直書きしない)
+  const desc = describeEvent(kind);
+  return cleanLine(await client.generate(poemRequest({ ...ctx, subject: desc ? desc.subject : undefined })), 40);
 }
 
 export async function generateTale(client, ctx) {

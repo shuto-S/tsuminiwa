@@ -23,17 +23,11 @@ export function mutterRequest(ctx) {
   return { system, prompt, maxOutputTokens: 40 };
 }
 
-// レアなできごとに添える一句(俳句/短歌)。kind と季節・言語で内容が変わる。
-const RARE_SUBJECT = {
-  whale: 'a giant whale drifting slowly across the sky',
-  meteor: 'a meteor shower streaking across the night',
-  goldfish: 'a golden fish leaping from the pond',
-  aurora: 'the aurora shimmering over the winter night',
-  blacklamb: 'a rare black lamb born in the village',
-};
-export function poemRequest(kind, ctx) {
+// レアなできごとに添える一句(俳句/短歌)。subject は #5 の descriptor レジストリから
+// 引いて渡す(直書きしない)。新イベントを registerEvent すれば一句が自動対応する。
+export function poemRequest(ctx) {
   const lang = LANG_NAME[ctx.lang] || 'Japanese';
-  const subject = RARE_SUBJECT[kind] || 'a quiet, wondrous moment';
+  const subject = ctx.subject || 'a quiet, wondrous moment';
   const system =
     `You are a gentle poet for a cozy hex-block garden game. ` +
     `Write ONE short poem (a haiku- or tanka-like single line, evoking the season) about the given moment. ` +

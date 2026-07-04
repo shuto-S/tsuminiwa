@@ -28,12 +28,12 @@ test('mutterRequest: 英語指定', () => {
   assert.match(req.system, /English/);
 });
 
-test('poemRequest: kind と季節・言語が入る', () => {
-  const r = poemRequest('whale', { season: 'spring', lang: 'ja' });
+test('poemRequest: subject と季節・言語が入る', () => {
+  const r = poemRequest({ subject: 'a whale in the sky', season: 'spring', lang: 'ja' });
   assert.match(r.system, /Japanese/);
   assert.match(r.prompt, /whale/);
   assert.match(r.prompt, /spring/);
-  const en = poemRequest('aurora', { season: 'winter', lang: 'en' });
+  const en = poemRequest({ subject: 'the aurora', season: 'winter', lang: 'en' });
   assert.match(en.system, /English/);
   assert.match(en.prompt, /aurora/);
 });
