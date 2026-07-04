@@ -18,6 +18,8 @@
 <img src="docs/demo.gif" width="440" alt="つみにわのデモ: 水が流れ、雨がふって晴れ、たきびが灯り、住民が歩きまわる様子" />
 <br />
 <sub>水を流して、たきびを灯して、雨があがるのを眺める ── あとはぜんぶ勝手に進みます</sub>
+<br />
+<sub>▶ 高画質版: <a href="docs/demo.mp4">docs/demo.mp4</a></sub>
 
 </div>
 
