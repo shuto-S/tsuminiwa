@@ -64,7 +64,6 @@ export function chronicleRequest(events, ctx) {
 
 // 名前プールの補充: 種類ごとに、季節にちなんだ名前を数個 JSON 配列で。
 export function namesRequest(type, ctx) {
-  const lang = LANG_NAME[ctx.lang] || 'Japanese';
   const kindWord = { villager: 'villagers (people)', sheep: 'sheep', chicken: 'chickens' }[type] || type;
   const script = ctx.lang === 'en' ? 'short romanized names' : 'short cute Japanese names (kana)';
   const system =

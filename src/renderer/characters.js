@@ -245,13 +245,13 @@ class Character {
 
     // walking
     this.progress += (dt * speed) / MOVE_DURATION[this.type];
-    const t = Math.min(1, this.progress);
-    const ease = t * t * (3 - 2 * t);
+    const p = Math.min(1, this.progress);
+    const ease = p * p * (3 - 2 * p);
     this.mesh.position.x = this.from.x + (this.to.x - this.from.x) * ease;
     this.mesh.position.z = this.from.z + (this.to.z - this.from.z) * ease;
     this.mesh.position.y =
-      this.from.y + (this.to.y - this.from.y) * ease + Math.sin(t * Math.PI) * 0.16;
-    if (t >= 1) {
+      this.from.y + (this.to.y - this.from.y) * ease + Math.sin(p * Math.PI) * 0.16;
+    if (p >= 1) {
       this.state = 'idle';
       this.stepsRemaining--;
       if (this.stepsRemaining <= 0) this.done = true;

@@ -9,6 +9,7 @@
     "build": "esbuild src/renderer/main.js --bundle --outfile=dist/renderer.js --log-level=warning",
     "watch": "esbuild src/renderer/main.js --bundle --outfile=dist/renderer.js --watch",
     "start": "npm run build && electron .",
+    "lint": "eslint .",
     "test": "node --test test/*.test.mjs",
     "package": "npm run build && electron-packager . つみにわ --platform=darwin --arch=${npm_config_arch:-arm64} --out=release --overwrite --icon=build/icon.icns --app-bundle-id=dev.amusphere.tsuminiwa --ignore=\"^/src\" --ignore=\"^/release\" --ignore=\"^/build\" --ignore=\"^/test\" --ignore=\"^/scripts\" --ignore=\"^/docs\" --ignore=\"^/\\.\" --ignore=\"^/AGENTS\\.md\" --ignore=\"^/README\" --ignore=\"^/DEVELOPMENT\\.md\" --ignore=\"^/LICENSE\""
   },
@@ -18,9 +19,12 @@
   },
   "devDependencies": {
     "@electron/packager": "^20.0.2",
+    "@eslint/js": "^9.39.4",
     "electron": "^37.0.0",
     "esbuild": "^0.25.0",
-    "gifenc": "^1.0.3"
+    "eslint": "^9.39.4",
+    "gifenc": "^1.0.3",
+    "globals": "^17.7.0"
   },
   "allowScripts": {
     "electron@37.10.3": true,

@@ -3,7 +3,6 @@
 import * as THREE from 'three';
 import { HEX_RADIUS, BLOCK_HEIGHT } from './config.js';
 import { clearGroup } from './three-utils.js';
-import { t } from './i18n/index.js';
 
 function radialGlowTexture(inner, outer) {
   const canvas = document.createElement('canvas');
@@ -39,14 +38,19 @@ export class SeasonalEvents {
     this.weather = weather;
     this.daynight = daynight;
     this.settings = settings;
-    this.onEvent = null;
-    this.onFlavor = null; // レアなできごとで AI に一句を頼むフック
+    // レアなできごとは意味キーで一元通知する(翻訳・AI連携は main が担当)
+    this.onRare = null;
     this.time = 0;
     this.group = new THREE.Group();
     scene.add(this.group);
     this.moonTexture = radialGlowTexture('rgba(250, 240, 205, 1)', 'rgba(245, 230, 180, 0.55)');
     this.auroraTexture = auroraTexture();
     this.setWorld(world);
+  }
+
+  // レアなできごとを意味キーで通知(表示メッセージ・AI連携は main の emitRare が担当)
+  emitRare(key) {
+    if (this.onRare) this.onRare(key);
   }
 
   get calm() {
@@ -129,8 +133,7 @@ export class SeasonalEvents {
 
     if (this.auroraT <= 0 && conditions && Math.random() < dt / 1500) {
       this.auroraT = 45;
-      if (this.onEvent) this.onEvent(t('event.rareAurora'));
-      if (this.onFlavor) this.onFlavor('aurora');
+      this.emitRare('aurora');
     }
     if (this.auroraT > 0) this.auroraT -= dt;
 

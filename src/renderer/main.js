@@ -14,6 +14,7 @@ import { CritterSystem } from './critters.js';
 import { SeasonalEvents } from './seasonal.js';
 import { setupUI, showToast, setWeatherDisplay, setSeasonDisplay } from './ui.js';
 import { t, setLanguage, getLanguage } from './i18n/index.js';
+import { rareEvent } from './events.js';
 import { AiClient } from './ai/client.js';
 import {
   generateMutter,
@@ -112,7 +113,6 @@ async function main() {
   aging.onEvent = notify;
   const critters = new CritterSystem(view.scene, world, weather, daynight, state.settings);
   const seasonal = new SeasonalEvents(view.scene, world, weather, daynight, state.settings);
-  seasonal.onEvent = notify;
   const audio = new AmbientAudio(state.settings);
   weather.calendar = daynight;
   autopilot.weather = weather;
@@ -139,10 +139,18 @@ async function main() {
       flavorBusy = false;
     }
   }
-  critters.onFlavor = onFlavor;
-  seasonal.onFlavor = onFlavor;
   characters.onFlavor = onFlavor;
-  critters.onEvent = notify;
+
+  // レアなできごとの発火を一元化: 意味キー → 表示メッセージ(翻訳)＋ AI フレーバー。
+  // critters / seasonal はキーを emit するだけで、翻訳関数を持たない(同名シャドウ事故の予防)。
+  function emitRare(key) {
+    const def = rareEvent(key);
+    if (!def) return;
+    if (def.message) notify(t(def.message));
+    if (def.flavor) onFlavor(def.flavor);
+  }
+  critters.onRare = emitRare;
+  seasonal.onRare = emitRare;
 
   // ---- AI命名(#6): 名前プールを背景で補充し、pickName が在庫を優先する ----
   // プールは AiClient(kind='name:<type>')。同期の spawn を壊さないための仕組み
@@ -328,6 +336,10 @@ async function main() {
     state
   );
 
+  // 描画済みのワールド版。rebuildWorld からも参照するのでここで宣言しておく
+  // (-1 で必ず初回 rebuild させる。季節色・氷が未反映のまま描かれないように)
+  let renderedVersion = -1;
+
   // 世界を作り直す共通処理(手動リセット・ことばで世界生成の両方から)
   function rebuildWorld(size, maxHeight, params = null) {
     state.gridSize = size;
@@ -405,9 +417,6 @@ async function main() {
 
   // ---- メインループ ----
   const clock = new THREE.Clock();
-  // 初回は必ず rebuild させる。SceneView の初期 rebuild は applySeason より前に
-  // 走っているので、季節色や冬の氷が反映されていない(-1 で確実に描き直す)
-  let renderedVersion = -1;
 
   // 省電力: フォーカスがないときは10fpsに落とす(ロジックはdtで進むので遅れない)
   let windowFocused = document.hasFocus();
