@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { HEX_RADIUS, BLOCK_HEIGHT } from './config.js';
 import { clearGroup } from './three-utils.js';
+import { t } from './i18n/index.js';
 
 function radialGlowTexture(inner, outer) {
   const canvas = document.createElement('canvas');
@@ -127,7 +128,7 @@ export class SeasonalEvents {
 
     if (this.auroraT <= 0 && conditions && Math.random() < dt / 1500) {
       this.auroraT = 45;
-      if (this.onEvent) this.onEvent('🌌 よぞらが ゆらめいている…');
+      if (this.onEvent) this.onEvent(t('event.rareAurora'));
     }
     if (this.auroraT > 0) this.auroraT -= dt;
 

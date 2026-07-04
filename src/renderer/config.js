@@ -8,43 +8,45 @@ export const DEFAULT_ROWS = 15;
 export const DEFAULT_MAX_HEIGHT = 8;
 export const MAX_CHARACTERS = 12;
 
+// 表示名は i18n の block.<key> で引く(ここには持たない)
 export const BLOCK_TYPES = {
-  grass: { name: 'くさ', color: 0x6cc75a },
-  dirt: { name: 'つち', color: 0x9a6a44 },
-  stone: { name: 'いし', color: 0xa9a9b0 },
-  sand: { name: 'すな', color: 0xe8d79a },
-  wood: { name: 'き', color: 0x7d5638 },
-  leaves: { name: 'はっぱ', color: 0x3f9c46 },
-  brick: { name: 'レンガ', color: 0xc06045 },
-  snow: { name: 'ゆき', color: 0xf1f5f8 },
-  water: { name: 'みず', color: 0x4aa8e8, water: true },
-  campfire: { name: 'たきび', color: 0x6b4a2f, fire: true },
-  ash: { name: 'はい', color: 0x6e6a66 },
-  farm: { name: 'はたけ', color: 0x7a5a38 },
+  grass: { color: 0x6cc75a },
+  dirt: { color: 0x9a6a44 },
+  stone: { color: 0xa9a9b0 },
+  sand: { color: 0xe8d79a },
+  wood: { color: 0x7d5638 },
+  leaves: { color: 0x3f9c46 },
+  brick: { color: 0xc06045 },
+  snow: { color: 0xf1f5f8 },
+  water: { color: 0x4aa8e8, water: true },
+  campfire: { color: 0x6b4a2f, fire: true },
+  ash: { color: 0x6e6a66 },
+  farm: { color: 0x7a5a38 },
 };
 
 export const FLOWER_COLORS = [0xf27ea9, 0xf2d54e, 0xffffff, 0xb98aef];
 
-// 季節。weights は天気の出やすさ、leaves/grass は葉と草の色
+// 季節。name は i18n の season.<key> で引く。weights は天気の出やすさ、
+// leaves/grass は葉と草の色
 export const DAYS_PER_SEASON = 3;
 export const SEASONS = [
   {
-    key: 'spring', name: 'はる', emoji: '🌸',
+    key: 'spring', emoji: '🌸',
     leaves: 0x5fbf63, grass: 0x6cc75a,
     weights: { sunny: 0.42, cloudy: 0.28, rain: 0.26, snow: 0.04 },
   },
   {
-    key: 'summer', name: 'なつ', emoji: '🌻',
+    key: 'summer', emoji: '🌻',
     leaves: 0x2f8f3c, grass: 0x58bb4a,
     weights: { sunny: 0.55, cloudy: 0.23, rain: 0.2, snow: 0.02 },
   },
   {
-    key: 'autumn', name: 'あき', emoji: '🍁',
+    key: 'autumn', emoji: '🍁',
     leaves: 0xd07a2e, grass: 0x9db04e,
     weights: { sunny: 0.4, cloudy: 0.3, rain: 0.22, snow: 0.08 },
   },
   {
-    key: 'winter', name: 'ふゆ', emoji: '⛄',
+    key: 'winter', emoji: '⛄',
     leaves: 0x8a7a52, grass: 0xb9c4b4,
     weights: { sunny: 0.3, cloudy: 0.3, rain: 0.06, snow: 0.34 },
   },
@@ -54,6 +56,7 @@ export const CHARACTER_TYPES = ['villager', 'sheep', 'chicken'];
 
 // 設定パネルからユーザーが変えられる値
 export const DEFAULT_SETTINGS = {
+  language: 'ja', // アプリ内言語(ja / en)
   characterScale: 1.45, // キャラクターの見た目の大きさ
   characterSpeed: 1, // キャラクターの歩く・動き出すはやさ(倍率)
   autoSpeed: 1, // 自動発展のはやさ(倍率)

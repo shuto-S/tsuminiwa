@@ -5,12 +5,12 @@ const PUDDLE_TOPS = new Set(['grass', 'dirt', 'stone', 'sand', 'ash']);
 const RAINBOW_COLORS = [0xe85a5a, 0xe8a44a, 0xe8d54a, 0x6cc75a, 0x4aa8e8, 0x9a6fd0];
 const RAINBOW_LIFE = 26; // 秒
 
-// 天気ごとの光と雲の目標値
+// 天気ごとの光と雲の目標値。表示名は i18n の weather.<state> で引く
 const KINDS = {
-  sunny: { label: 'はれ', emoji: '☀️', sun: 1.9, ambient: 0.85, cloud: 0 },
-  cloudy: { label: 'くもり', emoji: '☁️', sun: 1.15, ambient: 0.75, cloud: 0.8 },
-  rain: { label: 'あめ', emoji: '🌧️', sun: 0.75, ambient: 0.65, cloud: 0.9 },
-  snow: { label: 'ゆき', emoji: '🌨️', sun: 1.0, ambient: 0.8, cloud: 0.7 },
+  sunny: { emoji: '☀️', sun: 1.9, ambient: 0.85, cloud: 0 },
+  cloudy: { emoji: '☁️', sun: 1.15, ambient: 0.75, cloud: 0.8 },
+  rain: { emoji: '🌧️', sun: 0.75, ambient: 0.65, cloud: 0.9 },
+  snow: { emoji: '🌨️', sun: 1.0, ambient: 0.8, cloud: 0.7 },
 };
 
 const WEIGHTS = [
@@ -48,6 +48,10 @@ export class WeatherSystem {
     view.scene.add(this.group);
     this.setWorld(world);
     this.onChange(this.state, KINDS[this.state]);
+  }
+
+  get emoji() {
+    return KINDS[this.state].emoji;
   }
 
   setWorld(world) {

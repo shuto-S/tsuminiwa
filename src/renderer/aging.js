@@ -1,4 +1,5 @@
 import { shuffle, treeRemovalPlan, isTreeColumn } from './terrain.js';
+import { t } from './i18n/index.js';
 
 const TICK = 1; // 年齢を進める間隔(秒)
 const DECAY_STEP_INTERVAL = 1.8; // 枯れ・崩れで1ブロック消える間隔
@@ -57,7 +58,7 @@ export class Aging {
   tick() {
     this.ageTops('campfire', CAMPFIRE_LIFE, (c, r) => {
       this.world.replaceTop(c, r, 'ash');
-      if (this.onEvent) this.onEvent('🔥 たきびが燃えつきた');
+      if (this.onEvent) this.onEvent(t('event.agingCampfire'));
     });
     this.ageTops('ash', ASH_LIFE, (c, r) => this.world.removeTop(c, r));
     this.ageFlowers();
@@ -119,7 +120,7 @@ export class Aging {
 
     const [c, r] = trunks[Math.floor(Math.random() * trunks.length)];
     this.queue.push(...treeRemovalPlan(this.world, c, r).map((b) => ({ ...b })));
-    this.queueLabel = '🍂 ふるい木がかれた';
+    this.queueLabel = t('event.agingTree');
   }
 
   // 家の崩落: 屋根と壁を少しずつ崩す
@@ -142,6 +143,6 @@ export class Aging {
       }
     }
     this.queue.push(...shuffle(walls)); // 崩れる順はバラバラに
-    this.queueLabel = '🏚️ ふるい家がくずれた';
+    this.queueLabel = t('event.agingHut');
   }
 }

@@ -60,6 +60,8 @@ src/renderer/
                            (雨・風ノイズ、鳥チャープ、虫パルス、たきびクラックル)。
                            settings.sound オフで AudioContext を suspend
   ui.js                    DOM イベントの配線 + トースト通知(showToast)・天気表示・ツールチップ
+  i18n/index.js            多言語エンジン(t / setLanguage / applyDomTranslations / namesFor)
+  i18n/locales/ja.js       日本語辞書(基準)。en.js は英語。LOCALES に足せば言語追加
 ```
 
 このほかリポジトリ直下に `build/`(アプリアイコンの元絵と icns)、
@@ -149,6 +151,22 @@ src/renderer/
   種類・確率はドキュメントに書かない**(README でも「ひみつ」とだけ匂わせている)。
   実装は critters.js と characters.js の低確率ロール+トースト通知のパターンを参照。
   新しいレアを足すときも同じパターンに倣い、ドキュメントには具体を書かないこと。
+
+### 多言語(i18n)
+- ユーザーに見える文字列は**必ず `t('key', params)` 経由**にする。直書き禁止。
+  辞書は `i18n/locales/{ja,en}.js`(フラットなキー→文字列、`{name}` を params で差し替え)。
+- 言語を増やすときは locale ファイルを足して `i18n/index.js` の LOCALES に登録するだけ。
+  設定の言語セレクタにも自動で並ぶ。
+- 静的な DOM は index.html に `data-i18n`(テキスト)/ `data-i18n-title`(ツールチップ)を付け、
+  `applyDomTranslations()` が流し込む。動的な文字列(トースト・roster・天気/季節表示)は
+  生成時に t() を呼ぶ。言語切替時は ui.js が applyDomTranslations + パレット/スライダー/
+  roster を引き直し、main が天気・季節表示を引き直す。
+- **キーで持つべきもの**(表示名を辞書に、コードは言語非依存キーで扱う):
+  BLOCK_TYPES(block.<key>)、SEASONS(season.<key>)、weather KINDS(weather.<state>)、
+  TRAITS(trait.<key>)、JOBS(job.<key>)。**serialize は trait/job のキーで保存**し、
+  旧セーブの日本語ラベルは characters.js の LEGACY_TRAIT/LEGACY_JOB で読み替える。
+- キャラ名は言語ごとの名前プール(namesFor)から採るが、付いた名前は固有名として保存され、
+  言語を変えても変わらない(混在は仕様)。初回起動のみ OS 言語で既定を決める。
 
 ### 設定の追加手順
 新しい設定(DEFAULT_SETTINGS のキー)を足すときは4か所:

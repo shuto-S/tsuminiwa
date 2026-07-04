@@ -1,4 +1,5 @@
 import { treePlan, shuffle, isTreeColumn } from './terrain.js';
+import { t } from './i18n/index.js';
 
 const PLAN_INTERVAL = 2.2; // 次のできごとを考えるまでの間隔
 const BUILD_INTERVAL = 0.28; // 建設中の1ブロックごとの間隔
@@ -170,7 +171,7 @@ export class Autopilot {
       const site = this.hutPlan(c, r);
       if (site) {
         this.queue.push(...site);
-        this.queueLabel = '🏠 ちいさな家がたった';
+        this.queueLabel = t('event.autopilotHut');
         return;
       }
     }

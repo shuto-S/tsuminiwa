@@ -1,6 +1,10 @@
 import { BLOCK_TYPES } from './config.js';
+import { t, setLanguage, applyDomTranslations, LOCALES } from './i18n/index.js';
 
 export function setupUI(callbacks, state) {
+  // 静的な DOM(data-i18n / data-i18n-title)にまず訳文を流し込む
+  applyDomTranslations();
+
   // ---- パレット ----
   const palette = document.getElementById('palette');
   const swatches = new Map();
@@ -10,10 +14,16 @@ export function setupUI(callbacks, state) {
     for (const [key, el] of swatches) el.classList.toggle('selected', key === tool);
   };
 
+  // パレットのツールチップは言語切替で引き直せるよう関数にまとめる
+  const refreshPaletteTips = () => {
+    for (const [key, el] of swatches) {
+      el.dataset.tip = key === 'erase' ? t('tip.erase') : t('tip.place', { name: t(`block.${key}`) });
+    }
+  };
+
   for (const [key, def] of Object.entries(BLOCK_TYPES)) {
     const el = document.createElement('div');
     el.className = 'swatch';
-    el.title = `${def.name}を置く`;
     el.style.background = `#${def.color.toString(16).padStart(6, '0')}`;
     el.addEventListener('click', () => select(key));
     palette.appendChild(el);
@@ -22,12 +32,12 @@ export function setupUI(callbacks, state) {
 
   const eraser = document.createElement('div');
   eraser.className = 'swatch';
-  eraser.title = 'ブロックをこわす(右クリックでも可)';
   eraser.style.background = 'rgba(255,255,255,0.15)';
   eraser.textContent = '⛏';
   eraser.addEventListener('click', () => select('erase'));
   palette.appendChild(eraser);
   swatches.set('erase', eraser);
+  refreshPaletteTips();
 
   select(state.tool);
 
@@ -75,19 +85,21 @@ export function setupUI(callbacks, state) {
 
   // ---- 設定パネル ----
   const panel = document.getElementById('settings-panel');
+  const renderRoster = () => {
+    if (!callbacks.getRoster) return;
+    const roster = document.getElementById('roster');
+    roster.textContent = '';
+    for (const line of callbacks.getRoster()) {
+      const el = document.createElement('div');
+      el.textContent = line;
+      roster.appendChild(el);
+    }
+    if (roster.childElementCount === 0) roster.textContent = t('roster.empty');
+  };
   document.getElementById('btn-settings').addEventListener('click', () => {
     panel.classList.toggle('hidden');
     // 開くたびに「なかま」一覧を作り直す
-    if (!panel.classList.contains('hidden') && callbacks.getRoster) {
-      const roster = document.getElementById('roster');
-      roster.textContent = '';
-      for (const line of callbacks.getRoster()) {
-        const el = document.createElement('div');
-        el.textContent = line;
-        roster.appendChild(el);
-      }
-      if (roster.childElementCount === 0) roster.textContent = 'まだ だれもいない';
-    }
+    if (!panel.classList.contains('hidden')) renderRoster();
   });
 
   const gridSize = document.getElementById('grid-size');
@@ -97,11 +109,11 @@ export function setupUI(callbacks, state) {
 
   gridSize.value = state.gridSize;
   maxHeight.value = state.maxHeight;
-  gridSizeValue.textContent = `${state.gridSize}×${state.gridSize}`;
+  gridSizeValue.textContent = t('unit.grid', { v: state.gridSize });
   maxHeightValue.textContent = state.maxHeight;
 
   gridSize.addEventListener('input', () => {
-    gridSizeValue.textContent = `${gridSize.value}×${gridSize.value}`;
+    gridSizeValue.textContent = t('unit.grid', { v: gridSize.value });
   });
   maxHeight.addEventListener('input', () => {
     maxHeightValue.textContent = maxHeight.value;
@@ -114,24 +126,26 @@ export function setupUI(callbacks, state) {
   });
 
   // ---- ゲーム設定(その場で反映) ----
+  const sliderRefreshers = []; // 言語切替で単位表示を引き直すため
   const bindSlider = (id, key, format) => {
     const input = document.getElementById(id);
     const value = document.getElementById(`${id}-value`);
     input.value = state.settings[key];
-    value.textContent = format(state.settings[key]);
+    const render = () => (value.textContent = format(Number(input.value)));
+    render();
+    sliderRefreshers.push(render);
     input.addEventListener('input', () => {
-      const v = Number(input.value);
-      value.textContent = format(v);
-      callbacks.settingChanged(key, v);
+      render();
+      callbacks.settingChanged(key, Number(input.value));
     });
   };
-  const times = (v) => `×${v.toFixed(2).replace(/0+$/, '').replace(/\.$/, '')}`;
+  const times = (v) => t('unit.times', { v: v.toFixed(2).replace(/0+$/, '').replace(/\.$/, '') });
   bindSlider('char-scale', 'characterScale', times);
   bindSlider('char-speed', 'characterSpeed', times);
   bindSlider('auto-speed', 'autoSpeed', times);
-  bindSlider('day-length', 'dayLength', (v) => `${Math.round(v / 60)}分`);
-  bindSlider('weather-interval', 'weatherInterval', (v) => `${v}秒`);
-  bindSlider('sound-volume', 'volume', (v) => `${Math.round(v * 100)}%`);
+  bindSlider('day-length', 'dayLength', (v) => t('unit.minutes', { v: Math.round(v / 60) }));
+  bindSlider('weather-interval', 'weatherInterval', (v) => t('unit.seconds', { v }));
+  bindSlider('sound-volume', 'volume', (v) => t('unit.percent', { v: Math.round(v * 100) }));
 
   const bindCheckbox = (id, key) => {
     const input = document.getElementById(id);
@@ -147,6 +161,24 @@ export function setupUI(callbacks, state) {
   bindCheckbox('opt-pinned', 'pinned');
   bindCheckbox('opt-powersave', 'powerSave');
   bindCheckbox('opt-autolaunch', 'autoLaunch');
+
+  // ---- 言語セレクタ ----
+  const langSelect = document.getElementById('opt-language');
+  for (const loc of LOCALES) {
+    const opt = document.createElement('option');
+    opt.value = loc.code;
+    opt.textContent = loc.label;
+    langSelect.appendChild(opt);
+  }
+  langSelect.value = state.settings.language;
+  langSelect.addEventListener('change', () => {
+    setLanguage(langSelect.value);
+    applyDomTranslations(); // 静的なテキスト・ツールチップ
+    refreshPaletteTips();
+    for (const r of sliderRefreshers) r();
+    if (!panel.classList.contains('hidden')) renderRoster();
+    callbacks.settingChanged('language', langSelect.value); // 天気・季節の引き直し+保存
+  });
 
   document.getElementById('spawn-villager').addEventListener('click', () => callbacks.spawn('villager'));
   document.getElementById('spawn-sheep').addEventListener('click', () => callbacks.spawn('sheep'));
@@ -191,21 +223,22 @@ export function showToast(text) {
   setTimeout(() => toast.remove(), 4000);
 }
 
-// トップバーの天気表示を更新
-export function setWeatherDisplay(emoji, label) {
+// トップバーの天気表示を更新(state は 'sunny' などのキー)
+export function setWeatherDisplay(emoji, state) {
   const el = document.getElementById('weather');
   el.textContent = emoji;
-  el.dataset.tip = `いまの天気: ${label}`;
+  el.dataset.tip = t('tip.weather', { label: t(`weather.${state}`) });
 }
 
 // トップバーの季節・日数表示を更新
 export function setSeasonDisplay(season, day) {
   const el = document.getElementById('season');
-  el.textContent = `${season.emoji}${day + 1}日`;
-  el.dataset.tip = `${season.name}・${day + 1}日め`;
+  const name = t(`season.${season.key}`);
+  el.textContent = `${season.emoji}${t('unit.day', { v: day + 1 })}`;
+  el.dataset.tip = t('tip.season', { name, day: day + 1 });
 }
 
-// title 属性をマウスオーバーで即座に出るツールチップに変換する
+// data-i18n-title / 動的な dataset.tip をマウスオーバーで出すツールチップにする
 function setupTooltips() {
   const tip = document.createElement('div');
   tip.id = 'tooltip';
@@ -229,10 +262,9 @@ function setupTooltips() {
 
   const hide = () => tip.classList.remove('visible');
 
-  for (const el of document.querySelectorAll('[title]')) {
-    // すでに動的に dataset.tip が入っている要素(天気・季節表示)は上書きしない
-    if (!el.dataset.tip) el.dataset.tip = el.getAttribute('title');
-    el.removeAttribute('title');
+  // dataset.tip を持つ(あるいは動的に入る)要素にホバー表示をつける。
+  // 訳文は applyDomTranslations / refreshPaletteTips / 各 setter が dataset.tip に入れる
+  for (const el of document.querySelectorAll('[data-i18n-title], .swatch, #weather, #season')) {
     el.addEventListener('mouseenter', () => show(el));
     el.addEventListener('mouseleave', hide);
     el.addEventListener('click', hide);

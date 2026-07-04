@@ -13,6 +13,7 @@ import { AmbientAudio } from './audio.js';
 import { CritterSystem } from './critters.js';
 import { SeasonalEvents } from './seasonal.js';
 import { setupUI, showToast, setWeatherDisplay, setSeasonDisplay } from './ui.js';
+import { t, setLanguage } from './i18n/index.js';
 
 async function loadSave() {
   try {
@@ -59,6 +60,13 @@ async function main() {
     world = generateWorld(state.gridSize, state.gridSize, state.maxHeight);
   }
 
+  // 初回起動(セーブなし)は OS の言語で初期値を決める。以降は保存値に従う
+  if (!save) {
+    state.settings.language = navigator.language.startsWith('ja') ? 'ja' : 'en';
+  }
+  // 保存された言語を反映(以降の t() はこの言語で引かれる)
+  setLanguage(state.settings.language);
+
   const viewport = document.getElementById('viewport');
   const view = new SceneView(viewport, world);
   const characters = new CharacterManager(view.scene, world, state.settings);
@@ -69,9 +77,11 @@ async function main() {
   window.tsuminiwa.setAutoLaunch(state.settings.autoLaunch);
 
   let firstWeather = true;
-  const weather = new WeatherSystem(view, world, state.settings, (kind, def) => {
-    setWeatherDisplay(def.emoji, def.label);
-    if (!firstWeather) showToast(`${def.emoji} ${def.label}になった`);
+  const weather = new WeatherSystem(view, world, state.settings, (kindKey, def) => {
+    setWeatherDisplay(def.emoji, kindKey);
+    if (!firstWeather) {
+      showToast(t('event.weatherChanged', { emoji: def.emoji, label: t(`weather.${kindKey}`) }));
+    }
     firstWeather = false;
   });
   const daynight = new DayNight(view, state.settings);
@@ -102,7 +112,9 @@ async function main() {
     world.version++; // 色と氷を描き直す
     characters.rescueStranded(); // 氷がとけて水上に取り残されたキャラを助ける
     setSeasonDisplay(season, daynight.day);
-    if (announce) showToast(`${season.emoji} ${season.name}になった`);
+    if (announce) {
+      showToast(t('event.seasonChanged', { emoji: season.emoji, name: t(`season.${season.key}`) }));
+    }
   }
   let lastDay = daynight.day;
   applySeason(false);
@@ -119,11 +131,13 @@ async function main() {
     const type = roll < 0.7 ? 'traveler' : roll < 0.87 ? 'deer' : 'cat';
     if (characters.spawnVisitor(type)) {
       showToast(
-        {
-          traveler: '🚶 たびびとが やってきた',
-          deer: '🦌 しかが あそびに きた',
-          cat: '🐈 ねこが ふらりと あらわれた',
-        }[type]
+        t(
+          {
+            traveler: 'event.visitorTraveler',
+            deer: 'event.visitorDeer',
+            cat: 'event.visitorCat',
+          }[type]
+        )
       );
     }
   }
@@ -172,14 +186,19 @@ async function main() {
       capture: () => view.captureDataUrl(),
       saveShot: async (dataUrl) => {
         const file = await window.tsuminiwa.saveScreenshot(dataUrl);
-        showToast(file ? '📷 ピクチャの「つみにわ」に保存した' : '📷 保存できなかった…');
+        showToast(t(file ? 'shot.saved' : 'shot.saveFail'));
       },
       shareShot: async (dataUrl) => {
         const ok = await window.tsuminiwa.shareToX(dataUrl);
-        showToast(ok ? '🖼 画像をコピーした! Xの投稿に ⌘V で貼ってね' : 'シェアできなかった…');
+        showToast(t(ok ? 'shot.shared' : 'shot.shareFail'));
       },
       settingChanged: (key, value) => {
         state.settings[key] = value;
+        if (key === 'language') {
+          // 言語を変えたら、動的な表示(天気・季節)も引き直す
+          setWeatherDisplay(weather.emoji, weather.state);
+          setSeasonDisplay(daynight.season, daynight.day);
+        }
         if (key === 'characterScale') characters.applyScale();
         if (key === 'shadows') view.setShadows(value);
         if (key === 'pinned') window.tsuminiwa.setPinned(value);

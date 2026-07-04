@@ -2,26 +2,25 @@ import * as THREE from 'three';
 import { MAX_CHARACTERS } from './config.js';
 import { shuffle, treePlan, treeRemovalPlan, isTreeColumn } from './terrain.js';
 import { MAKERS } from './characterMeshes.js';
+import { t, namesFor } from './i18n/index.js';
 
-const NAMES = {
-  villager: ['そら', 'うみ', 'はな', 'ゆず', 'こはる', 'もも', 'りん', 'たろう', 'あおい', 'つむぎ', 'さくら', 'ふうた'],
-  sheep: ['モコ', 'フワ', 'メエ', 'ポワ', 'ユキ', 'マシュ', 'ワタ'],
-  chicken: ['ピヨ', 'コッコ', 'トサカ', 'マメ', 'ココ', 'チャボ'],
-  deer: ['モミジ', 'シカノスケ', 'バンビ'],
-  cat: ['タマ', 'クロ', 'ミケ', 'トラ'],
-  traveler: ['たびびと'],
-};
-
-// せいかく: 歩くはやさと、次の行動までの間の個体差
+// せいかく: 歩くはやさと、次の行動までの間の個体差。表示は i18n の trait.<key>
 export const TRAITS = [
-  { label: 'のんびり', speed: 0.8, idle: 1.4 },
-  { label: 'せっかち', speed: 1.25, idle: 0.65 },
-  { label: 'げんき', speed: 1.15, idle: 0.8 },
-  { label: 'まいぺーす', speed: 1, idle: 1 },
-  { label: 'おくびょう', speed: 0.9, idle: 1.25 },
+  { key: 'relaxed', speed: 0.8, idle: 1.4 },
+  { key: 'hasty', speed: 1.25, idle: 0.65 },
+  { key: 'lively', speed: 1.15, idle: 0.8 },
+  { key: 'mypace', speed: 1, idle: 1 },
+  { key: 'timid', speed: 0.9, idle: 1.25 },
 ];
 
-const JOBS = ['きこり', 'のうふ', 'つりびと', 'むらびと'];
+// しごとのキー。表示は i18n の job.<key>
+const JOBS = ['lumberjack', 'farmer', 'fisher', 'villager'];
+
+// 旧セーブ(日本語ラベル)を新しいキーに読み替える
+const LEGACY_TRAIT = {
+  のんびり: 'relaxed', せっかち: 'hasty', げんき: 'lively', まいぺーす: 'mypace', おくびょう: 'timid',
+};
+const LEGACY_JOB = { きこり: 'lumberjack', のうふ: 'farmer', つりびと: 'fisher', むらびと: 'villager' };
 
 const BABY_SCALE = 0.55;
 const GROW_TIME = 240; // 子どもがおとなになるまで(秒)
@@ -371,11 +370,11 @@ export class CharacterManager {
   }
 
   pickName(type) {
-    const pool = NAMES[type] || NAMES.villager;
+    const pool = namesFor(type);
     const used = new Set(this.characters.map((c) => c.name));
     const free = pool.filter((n) => !used.has(n));
     if (free.length > 0) return free[Math.floor(Math.random() * free.length)];
-    return pool[Math.floor(Math.random() * pool.length)] + '二世';
+    return t('name.suffix', { name: pool[Math.floor(Math.random() * pool.length)] });
   }
 
   // いちばん人数の少ないしごとに就く
@@ -466,8 +465,8 @@ export class CharacterManager {
       if (this.onEvent) {
         this.onEvent(
           animalsJoin
-            ? '🎉 たきびのまわりで どうぶつもいっしょに おまつり!'
-            : '🎉 たきびのまわりで おまつりが はじまった!'
+            ? t('event.festivalAnimals')
+            : t('event.festival')
         );
       }
       return;
@@ -520,18 +519,18 @@ export class CharacterManager {
           if (villagers < capacity && Math.random() < 0.6) {
             const settled = this.spawnAt('villager', c.col, c.row);
             if (settled && this.onEvent) {
-              this.onEvent(`🏡 たびびとが「${settled.name}」として むらに すみついた`);
+              this.onEvent(t('event.settle', { name: settled.name }));
             }
             continue;
           }
         }
         if (this.onEvent) {
           const farewell = {
-            traveler: '🚶 たびびとは さっていった',
-            deer: '🦌 しかは もりへ かえっていった',
-            cat: '🐈 ねこは きまぐれに さっていった',
+            traveler: 'event.farewellTraveler',
+            deer: 'event.farewellDeer',
+            cat: 'event.farewellCat',
           }[c.type];
-          if (farewell) this.onEvent(farewell);
+          if (farewell) this.onEvent(t(farewell));
         }
       }
     }
@@ -592,7 +591,7 @@ export class CharacterManager {
         [hc, hr] = near;
       }
       const chick = this.spawnAt('chicken', hc, hr, { baby: true });
-      if (chick && this.onEvent) this.onEvent(`🐣 ひよこの「${chick.name}」が かえった`);
+      if (chick && this.onEvent) this.onEvent(t('event.hatch', { name: chick.name }));
     }
   }
 
@@ -607,8 +606,8 @@ export class CharacterManager {
     if (!lamb || !this.onEvent) return;
     this.onEvent(
       variant === 'black'
-        ? `🐑 めずらしい くろい こひつじ、「${lamb.name}」が うまれた!`
-        : `🐑 こひつじの「${lamb.name}」が うまれた`
+        ? t('event.lambBlack', { name: lamb.name })
+        : t('event.lamb', { name: lamb.name })
     );
   }
 
@@ -711,7 +710,7 @@ export class CharacterManager {
   }
 
   assignTask(c) {
-    if (c.job === 'きこり') {
+    if (c.job === 'lumberjack') {
       if (this.jobQueue.length > 0) return;
       const trunks = this.world.columnsWhere((tc, tr) => isTreeColumn(this.world, tc, tr));
       if (trunks.length < 5) {
@@ -726,7 +725,7 @@ export class CharacterManager {
       c.task = { kind: 'chop', target: trunks[0] };
       return;
     }
-    if (c.job === 'のうふ') {
+    if (c.job === 'farmer') {
       const ripe = [...this.world.crops.entries()].filter(([, v]) => v.stage === 2);
       if (ripe.length > 0) {
         const [key] = ripe[Math.floor(Math.random() * ripe.length)];
@@ -760,7 +759,7 @@ export class CharacterManager {
       c.jobCooldown = 30;
       return;
     }
-    if (c.job === 'つりびと') {
+    if (c.job === 'fisher') {
       const spots = shuffle(
         this.world.columnsWhere(
           (tc, tr) =>
@@ -816,13 +815,13 @@ export class CharacterManager {
         }
       }
       c.jobCooldown = 150 + Math.random() * 150;
-      if (this.onEvent) this.onEvent(`🪓 ${c.name}が きをきって、あたらしい なえを うえた`);
+      if (this.onEvent) this.onEvent(t('event.jobChop', { name: c.name }));
       return;
     }
     if (task.kind === 'plantFarm') {
       if (this.world.topType(tc, tr) === 'grass') {
         this.world.replaceTop(tc, tr, 'farm');
-        if (this.onEvent) this.onEvent(`🧑‍🌾 ${c.name}が はたけを たがやした`);
+        if (this.onEvent) this.onEvent(t('event.jobTill', { name: c.name }));
       }
       c.jobCooldown = 40 + Math.random() * 40;
       return;
@@ -834,7 +833,7 @@ export class CharacterManager {
     }
     if (task.kind === 'harvest') {
       if (this.world.removeCrop(tc, tr) && this.onEvent) {
-        this.onEvent(`🌾 ${c.name}が こむぎを しゅうかくした`);
+        this.onEvent(t('event.jobHarvest', { name: c.name }));
       }
       c.jobCooldown = 40 + Math.random() * 40;
       return;
@@ -842,9 +841,9 @@ export class CharacterManager {
     if (task.kind === 'fish') {
       const roll = Math.random();
       if (roll < 0.03 && this.onEvent) {
-        this.onEvent(`✨ ${c.name}が きんいろの さかなを つりあげた!!`);
+        this.onEvent(t('event.jobGoldFish', { name: c.name }));
       } else if (roll < 0.38 && this.onEvent) {
-        this.onEvent(`🐟 ${c.name}が さかなを つりあげた`);
+        this.onEvent(t('event.jobFish', { name: c.name }));
       }
       c.jobCooldown = 70 + Math.random() * 80;
     }
@@ -870,16 +869,20 @@ export class CharacterManager {
     const emoji = { villager: '🧑', sheep: '🐑', chicken: '🐔', traveler: '🚶', deer: '🦌', cat: '🐈' };
     return this.characters.map((c) => {
       const tags = [];
-      if (c.baby) tags.push('こども');
-      if (c.variant === 'black') tags.push('くろ');
-      if (c.job) tags.push(c.job);
-      tags.push(c.trait.label);
-      return `${emoji[c.type] || '❓'} ${c.name}(${tags.join('・')})`;
+      if (c.baby) tags.push(t('tag.baby'));
+      if (c.variant === 'black') tags.push(t('tag.black'));
+      if (c.job) tags.push(t(`job.${c.job}`));
+      tags.push(t(`trait.${c.trait.key}`));
+      return t('roster.line', {
+        emoji: emoji[c.type] || '❓',
+        name: c.name,
+        tags: tags.join(t('roster.sep')),
+      });
     });
   }
 
   serialize() {
-    // 訪問者は保存しない(通りすがりなので)
+    // 訪問者は保存しない(通りすがりなので)。trait/job は言語非依存のキーで保存
     return this.characters
       .filter((c) => !VISITOR_TYPES.has(c.type))
       .map((c) => ({
@@ -890,7 +893,7 @@ export class CharacterManager {
         age: Math.round(c.age),
         name: c.name,
         job: c.job,
-        trait: c.trait.label,
+        trait: c.trait.key,
         variant: c.variant,
       }));
   }
@@ -898,12 +901,15 @@ export class CharacterManager {
   deserialize(list) {
     for (const item of list || []) {
       if (MAKERS[item.type] && this.world.inBounds(item.col, item.row)) {
+        // 旧セーブの日本語ラベルはキーに読み替える
+        const traitKey = LEGACY_TRAIT[item.trait] || item.trait;
+        const job = LEGACY_JOB[item.job] || item.job;
         this.spawnAt(item.type, item.col, item.row, {
           baby: Boolean(item.baby),
           age: item.age || 0,
           name: item.name,
-          job: item.job,
-          trait: TRAITS.find((t) => t.label === item.trait),
+          job,
+          trait: TRAITS.find((tr) => tr.key === traitKey),
           variant: item.variant || null,
         });
       }

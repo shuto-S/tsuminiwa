@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { BLOCK_HEIGHT, HEX_RADIUS } from './config.js';
 import { clearGroup } from './three-utils.js';
+import { t } from './i18n/index.js';
 
 const BUTTERFLY_COLORS = [0xf2a0c0, 0xf2d54e, 0x9ad4f2, 0xd0a0f2];
 
@@ -77,7 +78,7 @@ export class CritterSystem {
       this.whaleFlight = { t: 0 };
       this.whale.visible = true;
       this.whale.position.set(-this.span / 2 - 2.5, this.skyY + 2.2, -this.span * 0.15);
-      if (this.onEvent) this.onEvent('🐋 そらクジラが ゆっくりと およいでいく…');
+      if (this.onEvent) this.onEvent(t('event.rareWhale'));
       return;
     }
     this.whaleFlight.t += dt / 30; // 30秒かけて横切る
@@ -120,7 +121,7 @@ export class CritterSystem {
       this.settings.skyShows && this.daynight.isNight && this.weather.state === 'sunny';
     if (active && this.showerT <= 0 && Math.random() < dt / 2400) {
       this.showerT = 25;
-      if (this.onEvent) this.onEvent('🌠 りゅうせいぐん!');
+      if (this.onEvent) this.onEvent(t('event.rareMeteor'));
     }
 
     if (!this.starFlight) {
@@ -273,7 +274,7 @@ export class CritterSystem {
       // 低確率で金色のさかな
       const golden = Math.random() < 0.05;
       this.fish.material.color.setHex(golden ? 0xf2c33d : 0xe89a4a);
-      if (golden && this.onEvent) this.onEvent('✨ きんいろの さかなが はねた!');
+      if (golden && this.onEvent) this.onEvent(t('event.rareGoldFish'));
       this.fish.visible = true;
       return;
     }

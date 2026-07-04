@@ -24,15 +24,15 @@ function makeVillagerMesh(character) {
   group.add(part(new THREE.SphereGeometry(0.1, 8, 6), 0xf0c8a0, 0, 0.42, 0));
 
   // しごとで持ちものと帽子が変わる
-  if (character.job === 'のうふ') {
+  if (character.job === 'farmer') {
     group.add(part(new THREE.ConeGeometry(0.19, 0.08, 8), 0xd9c27a, 0, 0.5, 0)); // 麦わら帽子
-  } else if (character.job === 'きこり') {
+  } else if (character.job === 'lumberjack') {
     group.add(part(new THREE.CylinderGeometry(0.09, 0.1, 0.05, 6), 0x5a4632, 0, 0.51, 0)); // 帽子
     const handle = part(new THREE.CylinderGeometry(0.014, 0.014, 0.3, 4), 0x8a6a42, 0.15, 0.24, 0.04);
     handle.rotation.z = 0.35;
     group.add(handle);
     group.add(part(new THREE.BoxGeometry(0.07, 0.05, 0.02), 0x9a9aa2, 0.2, 0.36, 0.04)); // 斧
-  } else if (character.job === 'つりびと') {
+  } else if (character.job === 'fisher') {
     group.add(part(new THREE.ConeGeometry(0.11, 0.12, 6), shirt, 0, 0.53, 0));
     const rod = part(new THREE.CylinderGeometry(0.008, 0.008, 0.45, 4), 0x6a5236, 0.13, 0.35, 0.12);
     rod.rotation.x = -0.9;
