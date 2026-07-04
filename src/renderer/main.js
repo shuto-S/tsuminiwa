@@ -349,6 +349,12 @@ async function main() {
   // ---- 入力 ----
   const canvas = view.renderer.domElement;
   let hovered = null;
+  // フォーカスが外れているときの最初のクリックは「窓を呼び戻すだけ」にして、
+  // うっかりブロックを置かないようにする(focus 直後の1クリックだけ無視)
+  let refocusGuardUntil = 0;
+  window.addEventListener('focus', () => {
+    refocusGuardUntil = performance.now() + 350;
+  });
 
   canvas.addEventListener('pointermove', (event) => {
     hovered = view.pick(event.clientX, event.clientY);
@@ -359,6 +365,12 @@ async function main() {
   });
 
   canvas.addEventListener('pointerdown', (event) => {
+    // フォーカスを取り戻すためのクリックはブロック操作にしない(1回だけ無視)
+    if (performance.now() < refocusGuardUntil) {
+      refocusGuardUntil = 0;
+      hovered = view.pick(event.clientX, event.clientY);
+      return;
+    }
     const column = view.pick(event.clientX, event.clientY);
     if (!column) return;
     const remove = event.button === 2 || state.tool === 'erase';
