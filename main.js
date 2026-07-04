@@ -11,26 +11,6 @@ function savePath() {
   return path.join(app.getPath('userData'), 'world.json');
 }
 
-// 旧名「はこにわ」で保存していた世界を、新名のフォルダへ一度だけ引き継ぐ。
-// userData はアプリ名から導かれるため、改名で保存先が変わってしまうため
-function migrateOldSave() {
-  const target = savePath();
-  if (fs.existsSync(target)) return;
-  const appData = app.getPath('appData');
-  for (const oldName of ['hakoniwa', 'はこにわ']) {
-    const old = path.join(appData, oldName, 'world.json');
-    if (fs.existsSync(old)) {
-      try {
-        fs.mkdirSync(path.dirname(target), { recursive: true });
-        fs.copyFileSync(old, target);
-      } catch {
-        /* 引き継ぎに失敗しても新規の世界で始まる */
-      }
-      return;
-    }
-  }
-}
-
 function createWindow() {
   const { workArea } = screen.getPrimaryDisplay();
   const width = 480;
@@ -120,10 +100,7 @@ ipcMain.on('window:pin', (_event, pinned) => {
   if (win) win.setAlwaysOnTop(Boolean(pinned), 'floating');
 });
 
-app.whenReady().then(() => {
-  migrateOldSave();
-  createWindow();
-});
+app.whenReady().then(createWindow);
 
 app.on('window-all-closed', () => app.quit());
 
