@@ -35,6 +35,8 @@ export function setupUI(callbacks, state) {
   document.getElementById('btn-rotate-left').addEventListener('click', () => callbacks.rotate(1));
   document.getElementById('btn-rotate-right').addEventListener('click', () => callbacks.rotate(-1));
   document.getElementById('btn-quit').addEventListener('click', () => callbacks.quit());
+  document.getElementById('btn-shot').addEventListener('click', () => callbacks.screenshot());
+  document.getElementById('btn-share').addEventListener('click', () => callbacks.share());
 
   const autoButton = document.getElementById('btn-auto');
   const syncAutoButton = () => autoButton.classList.toggle('active', state.auto);
@@ -118,6 +120,7 @@ export function setupUI(callbacks, state) {
   bindCheckbox('opt-shadows', 'shadows');
   bindCheckbox('opt-pinned', 'pinned');
   bindCheckbox('opt-powersave', 'powerSave');
+  bindCheckbox('opt-autolaunch', 'autoLaunch');
 
   document.getElementById('spawn-villager').addEventListener('click', () => callbacks.spawn('villager'));
   document.getElementById('spawn-sheep').addEventListener('click', () => callbacks.spawn('sheep'));

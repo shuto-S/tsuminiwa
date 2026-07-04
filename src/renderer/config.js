@@ -60,6 +60,7 @@ export const DEFAULT_SETTINGS = {
   shadows: true, // デスクトップに影を落とす
   pinned: true, // 常に最前面に表示
   powerSave: true, // 非アクティブ時はフレームレートを落とす
+  autoLaunch: false, // ログイン時に自動起動(パッケージ版のみ有効)
   sound: true, // 環境音
   volume: 0.5, // 音量(0〜1)
   skyShows: true, // 空の演出(虹・ながれぼし)

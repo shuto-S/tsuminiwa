@@ -65,6 +65,7 @@ async function main() {
   autopilot.enabled = state.auto;
   view.setShadows(state.settings.shadows);
   window.hakoniwa.setPinned(state.settings.pinned);
+  window.hakoniwa.setAutoLaunch(state.settings.autoLaunch);
 
   let firstWeather = true;
   const weather = new WeatherSystem(view, world, state.settings, (kind, def) => {
@@ -165,11 +166,20 @@ async function main() {
         scheduleSave();
       },
       getRoster: () => characters.roster(),
+      screenshot: async () => {
+        const file = await window.hakoniwa.saveScreenshot(view.captureDataUrl());
+        showToast(file ? '📷 ピクチャの「はこにわ」に保存した' : '📷 保存できなかった…');
+      },
+      share: async () => {
+        const ok = await window.hakoniwa.shareToX(view.captureDataUrl());
+        showToast(ok ? '🖼 画像をコピーした! Xの投稿に ⌘V で貼ってね' : 'シェアできなかった…');
+      },
       settingChanged: (key, value) => {
         state.settings[key] = value;
         if (key === 'characterScale') characters.applyScale();
         if (key === 'shadows') view.setShadows(value);
         if (key === 'pinned') window.hakoniwa.setPinned(value);
+        if (key === 'autoLaunch') window.hakoniwa.setAutoLaunch(value);
         scheduleSave();
       },
       regenerate: (size, maxHeight) => {

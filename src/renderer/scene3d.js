@@ -495,6 +495,23 @@ export class SceneView {
     this.renderer.render(this.scene, this.camera);
   }
 
+  // 3Dキャンバスだけを空色の背景に合成してPNGにする(UIは写らない)
+  captureDataUrl() {
+    this.renderer.render(this.scene, this.camera); // 描画直後に読むと preserveDrawingBuffer なしでも取れる
+    const src = this.renderer.domElement;
+    const out = document.createElement('canvas');
+    out.width = src.width;
+    out.height = src.height;
+    const ctx = out.getContext('2d');
+    const sky = ctx.createLinearGradient(0, 0, 0, out.height);
+    sky.addColorStop(0, '#b8d4ea');
+    sky.addColorStop(1, '#8ba8c4');
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, out.width, out.height);
+    ctx.drawImage(src, 0, 0);
+    return out.toDataURL('image/png');
+  }
+
   // 画面座標からマスを求める。ブロック優先、なければ床平面
   pick(clientX, clientY) {
     const rect = this.renderer.domElement.getBoundingClientRect();

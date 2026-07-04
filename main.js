@@ -1,6 +1,8 @@
-const { app, BrowserWindow, ipcMain, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, clipboard, nativeImage, shell } = require('electron');
 const fs = require('fs');
 const path = require('path');
+
+const SHARE_TEXT = 'デスクトップのすみで、ちいさな世界が育っています 🌱 #はこにわ\nhttps://github.com/shuto-S/hakoniwa';
 
 const MARGIN = 16;
 let win = null;
@@ -56,6 +58,43 @@ ipcMain.handle('world:save', async (_event, json) => {
 });
 
 ipcMain.on('app:quit', () => app.quit());
+
+function pngBuffer(dataUrl) {
+  return Buffer.from(dataUrl.split(',')[1], 'base64');
+}
+
+// スクリーンショットをピクチャ/はこにわ に保存
+ipcMain.handle('shot:save', async (_event, dataUrl) => {
+  try {
+    const dir = path.join(app.getPath('pictures'), 'はこにわ');
+    await fs.promises.mkdir(dir, { recursive: true });
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const file = path.join(dir, `hakoniwa-${stamp}.png`);
+    await fs.promises.writeFile(file, pngBuffer(dataUrl));
+    return file;
+  } catch {
+    return null;
+  }
+});
+
+// 画像をクリップボードに入れて、Xの投稿画面を開く
+// (Xのweb intentは画像を添付できないため、貼り付けてもらう方式)
+ipcMain.handle('shot:share', async (_event, dataUrl) => {
+  try {
+    clipboard.writeImage(nativeImage.createFromBuffer(pngBuffer(dataUrl)));
+    await shell.openExternal(
+      `https://twitter.com/intent/tweet?text=${encodeURIComponent(SHARE_TEXT)}`
+    );
+    return true;
+  } catch {
+    return false;
+  }
+});
+
+// ログイン時に自動起動(パッケージ版のみ。開発時はelectron本体を登録してしまうため無視)
+ipcMain.on('app:autolaunch', (_event, enabled) => {
+  if (app.isPackaged) app.setLoginItemSettings({ openAtLogin: Boolean(enabled) });
+});
 
 ipcMain.on('window:pin', (_event, pinned) => {
   if (win) win.setAlwaysOnTop(Boolean(pinned), 'floating');

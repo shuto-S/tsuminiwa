@@ -45,6 +45,37 @@ function disposeMesh(root) {
   });
 }
 
+// あいさつの吹き出し(絵文字をスプライトで頭上に出す)
+const GREET_EMOJI = {
+  villager: '💬',
+  traveler: '💬',
+  sheep: '💕',
+  chicken: '🎵',
+  deer: '🌿',
+  cat: '…', // ねこはそっけない
+};
+const GREET_COOLDOWN = 90; // 同じ2人が続けてあいさつしない(秒)
+const BUBBLE_LIFE = 1.9;
+
+const bubbleTextures = new Map();
+function bubbleMaterial(emoji) {
+  if (!bubbleTextures.has(emoji)) {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 64;
+    const ctx = canvas.getContext('2d');
+    ctx.font = '44px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(emoji, 32, 36);
+    bubbleTextures.set(emoji, new THREE.CanvasTexture(canvas));
+  }
+  return new THREE.SpriteMaterial({
+    map: bubbleTextures.get(emoji),
+    transparent: true,
+    depthWrite: false,
+  });
+}
+
 class Character {
   constructor(type, col, row, world, scaleBase, opts = {}) {
     this.type = type;
@@ -93,6 +124,18 @@ class Character {
       const targetY = world.topSurfaceY(this.col, this.row);
       this.mesh.position.y += (targetY - this.mesh.position.y) * Math.min(1, dt * 10);
       this.mesh.position.y += Math.sin(time * 1.2 + this.phase) * 0.01; // 寝息
+      return;
+    }
+
+    if (this.state === 'greeting') {
+      // 向き合ってぴょこぴょこ
+      this.progress += (dt * speed) / 1.6;
+      const ground = world.topSurfaceY(this.col, this.row);
+      this.mesh.position.y = ground + Math.abs(Math.sin(Math.min(1, this.progress) * Math.PI * 2)) * 0.1;
+      if (this.progress >= 1) {
+        this.state = 'idle';
+        this.idleTimer = (0.8 + Math.random()) * this.trait.idle;
+      }
       return;
     }
 
@@ -278,6 +321,9 @@ export class CharacterManager {
     this.festivalT = 0;
     this.eggGeo = new THREE.SphereGeometry(0.06, 8, 6);
     this.eggMat = new THREE.MeshStandardMaterial({ color: 0xfaf3e0, roughness: 0.6 });
+    this.bubbles = []; // あいさつの吹き出し
+    this.greetTimer = 0;
+    this.pairCooldowns = new Map(); // "名前|名前" → 最後にあいさつした時刻
   }
 
   setWorld(world) {
@@ -287,8 +333,13 @@ export class CharacterManager {
       disposeMesh(c.mesh);
     }
     for (const egg of this.eggs) this.scene.remove(egg.mesh); // 卵は共有ジオメトリなので破棄しない
+    for (const bubble of this.bubbles) {
+      this.scene.remove(bubble.sprite);
+      bubble.sprite.material.dispose();
+    }
     this.characters = [];
     this.eggs = [];
+    this.bubbles = [];
     this.jobQueue = [];
     this.festivalActive = false;
   }
@@ -429,6 +480,7 @@ export class CharacterManager {
     this.updateBirths(dt);
     this.updateJobs(dt, isNight);
     this.updateCrops(dt);
+    this.updateGreetings(dt, time, isNight);
 
     // 歩ききった訪問者は去る。旅人は家に空きがあれば村にすみつく
     const leaving = this.characters.filter((c) => c.done);
@@ -521,6 +573,70 @@ export class CharacterManager {
         ? `🐑 めずらしい くろい こひつじ、「${lamb.name}」が うまれた!`
         : `🐑 こひつじの「${lamb.name}」が うまれた`
     );
+  }
+
+  // ---- あいさつ ----
+  // 近くにいるキャラ同士が、たまに向き合ってあいさつする
+  updateGreetings(dt, time, isNight) {
+    // 吹き出しの追従とフェード
+    for (const bubble of [...this.bubbles]) {
+      bubble.t += dt;
+      if (bubble.t >= BUBBLE_LIFE) {
+        this.scene.remove(bubble.sprite);
+        bubble.sprite.material.dispose(); // テクスチャは共有キャッシュなので残す
+        this.bubbles = this.bubbles.filter((b) => b !== bubble);
+        continue;
+      }
+      const char = bubble.char;
+      const pop = Math.min(1, bubble.t * 6);
+      bubble.sprite.scale.setScalar(0.34 * pop);
+      bubble.sprite.material.opacity = bubble.t > 1.4 ? (BUBBLE_LIFE - bubble.t) / 0.5 : 1;
+      bubble.sprite.position.set(
+        char.mesh.position.x,
+        char.mesh.position.y + 0.62 * char.mesh.scale.y + 0.15,
+        char.mesh.position.z
+      );
+    }
+
+    if (isNight || this.festivalActive) return;
+    this.greetTimer -= dt;
+    if (this.greetTimer > 0) return;
+    this.greetTimer = 1.2;
+
+    const idle = this.characters.filter((c) => c.state === 'idle');
+    for (let i = 0; i < idle.length; i++) {
+      for (let j = i + 1; j < idle.length; j++) {
+        const a = idle[i];
+        const b = idle[j];
+        if (this.world.distance(a.col, a.row, b.col, b.row) > 1) continue;
+        const key = [a.name + a.type, b.name + b.type].sort().join('|');
+        const last = this.pairCooldowns.get(key) ?? -Infinity;
+        if (time - last < GREET_COOLDOWN) continue;
+        if (Math.random() < 0.5) continue; // 毎回はしない
+        this.pairCooldowns.set(key, time);
+        this.startGreeting(a, b);
+        return; // 1スキャンで1組だけ
+      }
+    }
+  }
+
+  startGreeting(a, b) {
+    for (const [me, other] of [[a, b], [b, a]]) {
+      const p = this.world.positionOf(other.col, other.row);
+      me.mesh.rotation.y = Math.atan2(p.x - me.mesh.position.x, p.z - me.mesh.position.z);
+      if (me.type === 'cat') continue; // ねこは振り向くだけ
+      me.state = 'greeting';
+      me.progress = 0;
+    }
+    this.addBubble(a, GREET_EMOJI[a.type]);
+    if (Math.random() < 0.6) this.addBubble(b, GREET_EMOJI[b.type]);
+  }
+
+  addBubble(char, emoji) {
+    const sprite = new THREE.Sprite(bubbleMaterial(emoji));
+    sprite.scale.setScalar(0.01);
+    this.scene.add(sprite);
+    this.bubbles.push({ sprite, char, t: 0 });
   }
 
   // ---- 昼のしごと ----
