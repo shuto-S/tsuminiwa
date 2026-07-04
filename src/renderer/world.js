@@ -99,10 +99,13 @@ export class World {
   setBlock(col, row, y, type) {
     if (!this.inBounds(col, row) || y < 0 || y >= this.maxHeight) return false;
     const stack = this.stackAt(col, row);
+    const prevHeight = this.heightAt(col, row); // 置く前の地表の高さ
     while (stack.length <= y) stack.push(null);
     stack[y] = type;
     this.trim(stack);
-    if (type && this.topIndex(col, row) <= y) {
+    // 地表(直前の一番上)にじかに載せたときだけ飾りを消す。
+    // 畑の上に離れて木の葉が架かるようなケースでは作物を消さない
+    if (type && y <= prevHeight) {
       this.flowers.delete(`${col},${row}`);
       this.crops.delete(`${col},${row}`);
     }
@@ -114,6 +117,10 @@ export class World {
     const top = this.topIndex(col, row);
     if (top < 0) return false;
     this.stackAt(col, row)[top] = type;
+    // 一番上の種類が変わるので、花・作物の飾りは消す
+    // (ひつじが花付きの草を食べる、農夫が草を畑にする、など)
+    this.flowers.delete(`${col},${row}`);
+    this.crops.delete(`${col},${row}`);
     this.version++;
     return true;
   }

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { BLOCK_HEIGHT, HEX_RADIUS } from './config.js';
+import { clearGroup } from './three-utils.js';
 
 const BUTTERFLY_COLORS = [0xf2a0c0, 0xf2d54e, 0x9ad4f2, 0xd0a0f2];
 
@@ -31,7 +32,7 @@ export class CritterSystem {
     this.span = Math.max(spanX, spanZ);
     this.skyY = world.maxHeight * BLOCK_HEIGHT + 1.6;
 
-    this.group.clear();
+    clearGroup(this.group); // 前の生き物のGPUリソースを解放してから作り直す
     this.buildBirds();
     this.buildButterflies();
     this.buildFish();

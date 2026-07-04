@@ -341,6 +341,7 @@ export class CharacterManager {
     this.eggs = [];
     this.bubbles = [];
     this.jobQueue = [];
+    this.pairCooldowns.clear(); // 消えたキャラのあいさつ履歴を残さない
     this.festivalActive = false;
   }
 
@@ -442,7 +443,8 @@ export class CharacterManager {
       this.festivalActive = true;
       this.festivalT = FESTIVAL_LENGTH;
       for (const c of this.characters) {
-        c.targetSpot = fires[0];
+        // おまつりに参加するのはひとだけ。動物はふだんどおりその場で眠る
+        c.targetSpot = c.type === 'villager' ? fires[0] : null;
         c.task = null;
         if (c.state === 'working' || c.state === 'fishing') {
           c.state = 'idle';
@@ -490,6 +492,12 @@ export class CharacterManager {
       for (const c of leaving) {
         this.scene.remove(c.mesh);
         disposeMesh(c.mesh);
+        // 去るキャラの頭上に出ていた吹き出しも片づける(宙に残さない)
+        for (const bubble of this.bubbles.filter((b) => b.char === c)) {
+          this.scene.remove(bubble.sprite);
+          bubble.sprite.material.dispose();
+        }
+        this.bubbles = this.bubbles.filter((b) => b.char !== c);
         if (c.type === 'traveler') {
           const villagers = this.characters.filter((v) => v.type === 'villager').length;
           if (villagers < capacity && Math.random() < 0.6) {
@@ -554,7 +562,19 @@ export class CharacterManager {
       }
       this.scene.remove(egg.mesh);
       this.eggs = this.eggs.filter((e) => e !== egg);
-      const chick = this.spawnAt('chicken', egg.col, egg.row, { baby: true });
+      // 産んだ後にそのマスが水没・削除されていたら、近くの歩けるマスでかえす
+      let [hc, hr] = [egg.col, egg.row];
+      if (!this.world.isWalkable(hc, hr)) {
+        const near = this.world
+          .columnsWhere((c, r) => this.world.isWalkable(c, r))
+          .sort(
+            (a, b) =>
+              this.world.distance(hc, hr, a[0], a[1]) - this.world.distance(hc, hr, b[0], b[1])
+          )[0];
+        if (!near) continue; // 歩けるマスが無ければ、かえさず消す
+        [hc, hr] = near;
+      }
+      const chick = this.spawnAt('chicken', hc, hr, { baby: true });
       if (chick && this.onEvent) this.onEvent(`🐣 ひよこの「${chick.name}」が かえった`);
     }
   }
@@ -646,7 +666,11 @@ export class CharacterManager {
     if (this.jobQueue.length > 0 && this.jobStepTimer >= 0.28) {
       this.jobStepTimer = 0;
       const b = this.jobQueue.shift();
-      this.world.setBlock(b.col, b.row, b.y, b.type);
+      // 伐採で消す予定のマスは、まだ元のブロックが残っているときだけ消す
+      // (作業中にユーザーが置き換えたものを巻き込まない)
+      if (b.expect === undefined || this.world.stackAt(b.col, b.row)[b.y] === b.expect) {
+        this.world.setBlock(b.col, b.row, b.y, b.type);
+      }
     }
 
     for (const c of this.characters) {
@@ -746,8 +770,15 @@ export class CharacterManager {
 
     if (task.kind === 'chop') {
       if (!isTreeColumn(this.world, tc, tr)) return; // もう誰かが片づけた
+      // 元の種類を expect に残し、ユーザーが触っていないブロックだけ消す
       this.jobQueue.push(
-        ...treeRemovalPlan(this.world, tc, tr).map((b) => ({ ...b, type: null }))
+        ...treeRemovalPlan(this.world, tc, tr).map((b) => ({
+          col: b.col,
+          row: b.row,
+          y: b.y,
+          type: null,
+          expect: b.type,
+        }))
       );
       // 近くの草地に苗を植える
       const spots = shuffle(

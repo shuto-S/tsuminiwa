@@ -223,12 +223,14 @@ async function main() {
     const column = view.pick(event.clientX, event.clientY);
     if (!column) return;
     const remove = event.button === 2 || state.tool === 'erase';
-    if (remove) {
-      world.removeTop(column.col, column.row);
-    } else {
-      world.placeTop(column.col, column.row, state.tool);
-    }
+    const changed = remove
+      ? world.removeTop(column.col, column.row)
+      : world.placeTop(column.col, column.row, state.tool);
     hovered = column;
+    if (changed) {
+      characters.rescueStranded(); // 足元を消されたキャラを近くの陸へ
+      scheduleSave();
+    }
   });
 
   canvas.addEventListener('contextmenu', (event) => event.preventDefault());
@@ -246,7 +248,9 @@ async function main() {
 
   // ---- メインループ ----
   const clock = new THREE.Clock();
-  let renderedVersion = world.version;
+  // 初回は必ず rebuild させる。SceneView の初期 rebuild は applySeason より前に
+  // 走っているので、季節色や冬の氷が反映されていない(-1 で確実に描き直す)
+  let renderedVersion = -1;
 
   // 省電力: フォーカスがないときは10fpsに落とす(ロジックはdtで進むので遅れない)
   let windowFocused = document.hasFocus();

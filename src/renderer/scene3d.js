@@ -506,27 +506,28 @@ export class SceneView {
     const prevPixelRatio = this.renderer.getPixelRatio();
     const prevSize = new THREE.Vector2();
     this.renderer.getSize(prevSize);
-    this.renderer.setPixelRatio(1);
-    this.renderer.setSize(width, height, false); // CSSサイズは変えない
-    this.renderer.render(this.scene, this.camera); // 描画直後なら preserveDrawingBuffer なしでも読める
+    try {
+      this.renderer.setPixelRatio(1);
+      this.renderer.setSize(width, height, false); // CSSサイズは変えない
+      this.renderer.render(this.scene, this.camera); // 描画直後なら preserveDrawingBuffer なしでも読める
 
-    const out = document.createElement('canvas');
-    out.width = width;
-    out.height = height;
-    const ctx = out.getContext('2d');
-    const sky = ctx.createLinearGradient(0, 0, 0, height);
-    sky.addColorStop(0, '#b8d4ea');
-    sky.addColorStop(1, '#8ba8c4');
-    ctx.fillStyle = sky;
-    ctx.fillRect(0, 0, width, height);
-    ctx.drawImage(canvas, 0, 0, width, height);
-    const dataUrl = out.toDataURL('image/png');
-
-    // 画面表示用の解像度に戻す
-    this.renderer.setPixelRatio(prevPixelRatio);
-    this.renderer.setSize(prevSize.x, prevSize.y, false);
-    this.renderer.render(this.scene, this.camera);
-    return dataUrl;
+      const out = document.createElement('canvas');
+      out.width = width;
+      out.height = height;
+      const ctx = out.getContext('2d');
+      const sky = ctx.createLinearGradient(0, 0, 0, height);
+      sky.addColorStop(0, '#b8d4ea');
+      sky.addColorStop(1, '#8ba8c4');
+      ctx.fillStyle = sky;
+      ctx.fillRect(0, 0, width, height);
+      ctx.drawImage(canvas, 0, 0, width, height);
+      return out.toDataURL('image/png');
+    } finally {
+      // 途中で失敗しても、画面表示用の解像度に必ず戻す
+      this.renderer.setPixelRatio(prevPixelRatio);
+      this.renderer.setSize(prevSize.x, prevSize.y, false);
+      this.renderer.render(this.scene, this.camera);
+    }
   }
 
   // 画面座標からマスを求める。ブロック優先、なければ床平面

@@ -161,10 +161,9 @@ export class Autopilot {
     const hasVillager = this.characters.characters.some((c) => c.type === 'villager');
     if (!hasVillager) return;
 
-    const brickColumns = this.world.columnsWhere((c, r) =>
-      this.world.stackAt(c, r).includes('brick')
-    ).length;
-    if (brickColumns >= 15) return; // 小屋はだいたい3軒まで
+    // 建った小屋の数で数える。崩れかけの残骸レンガを数えて建設が
+    // 止まらないよう、生きている屋根の中心だけをカウントする
+    if (this.world.hutCenters().length >= 3) return;
 
     const spots = shuffle(this.grassTops());
     for (const [c, r] of spots) {

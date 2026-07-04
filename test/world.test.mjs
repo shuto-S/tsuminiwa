@@ -41,6 +41,32 @@ test('ブロックを置くと花と作物は消える', () => {
   assert.equal(world.crops.has('1,1'), false);
 });
 
+test('replaceTop は一番上を替えると花・作物を消す(ひつじの草食み・畑づくり)', () => {
+  const world = makeWorld();
+  world.placeTop(1, 1, 'grass');
+  world.flowers.add('1,1');
+  world.replaceTop(1, 1, 'dirt'); // 草を食べて土に
+  assert.equal(world.flowers.has('1,1'), false);
+  assert.equal(world.topType(1, 1), 'dirt');
+
+  world.placeTop(2, 2, 'farm');
+  world.plantCrop(2, 2);
+  world.replaceTop(2, 2, 'grass');
+  assert.equal(world.crops.has('2,2'), false);
+});
+
+test('setBlock: 畑の上に離れて木の葉が架かっても作物は消えない', () => {
+  const world = makeWorld();
+  world.placeTop(3, 3, 'farm'); // 高さ1
+  world.plantCrop(3, 3);
+  world.setBlock(3, 3, 4, 'leaves'); // 高さ4に浮かせる(間に空気)
+  assert.equal(world.crops.has('3,3'), true, '離れた葉では作物は消えない');
+
+  // 地表にじかに置いたときは消える
+  world.setBlock(3, 3, 1, 'stone');
+  assert.equal(world.crops.has('3,3'), false);
+});
+
 test('setBlock は null 埋めで宙に浮くブロックを作れる', () => {
   const world = makeWorld();
   world.placeTop(0, 0, 'grass');

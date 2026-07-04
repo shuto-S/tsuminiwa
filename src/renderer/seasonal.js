@@ -2,6 +2,7 @@
 // 具体的な内容はユーザ向けドキュメントには書かない(発見の楽しみのため)。
 import * as THREE from 'three';
 import { HEX_RADIUS, BLOCK_HEIGHT } from './config.js';
+import { clearGroup } from './three-utils.js';
 
 function radialGlowTexture(inner, outer) {
   const canvas = document.createElement('canvas');
@@ -56,7 +57,9 @@ export class SeasonalEvents {
     const spanZ = world.rows * HEX_RADIUS * 1.5;
     this.span = Math.max(spanX, spanZ);
     this.skyY = world.maxHeight * BLOCK_HEIGHT + 1.6;
-    this.group.clear();
+    // 共有テクスチャ(moonTexture/auroraTexture)は material.dispose() では
+    // 解放されないので、作り直しても残る。ジオメトリ・マテリアルだけ解放する
+    clearGroup(this.group);
     this.auroraT = 0;
     this.buildMoon();
     this.buildAurora();

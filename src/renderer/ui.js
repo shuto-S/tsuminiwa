@@ -230,7 +230,8 @@ function setupTooltips() {
   const hide = () => tip.classList.remove('visible');
 
   for (const el of document.querySelectorAll('[title]')) {
-    el.dataset.tip = el.getAttribute('title');
+    // すでに動的に dataset.tip が入っている要素(天気・季節表示)は上書きしない
+    if (!el.dataset.tip) el.dataset.tip = el.getAttribute('title');
     el.removeAttribute('title');
     el.addEventListener('mouseenter', () => show(el));
     el.addEventListener('mouseleave', hide);

@@ -43,6 +43,8 @@ src/renderer/
   terrain.js               初期地形生成(バリューノイズ)、木のプラン
                            (treePlan / treeRemovalPlan / isTreeColumn — 枯れと伐採で共用)
   characterMeshes.js       キャラの見た目(MAKERS)。job/variant で衣装・持ち物が変わる
+  three-utils.js           clearGroup()/disposeObject() — グループを作り直す前にGPU解放。
+                           マテリアルの .map(共有テクスチャ)は破棄しないので共有キャッシュは安全
   scene3d.js               SceneView クラス。Three.js の描画すべて(カメラ・ライト・InstancedMesh・ピッキング)
   characters.js            Character / CharacterManager。自律移動するキャラ(villager/sheep/chicken)
   autopilot.js             自動発展ルール(草の伝播・花・木・雪・小屋の建設キュー、天気・季節連動)
@@ -100,6 +102,12 @@ src/renderer/
 - キャラのメッシュはパーツごとに固有ジオメトリ/マテリアルを持つので、シーンから
   外すとき必ず characters.js の disposeMesh() を通す(常駐アプリのGPUリーク防止)。
   卵・花・たきび・作物は共有アセットなので破棄しない。
+- **Group を作り直す setWorld では `group.clear()` ではなく three-utils の
+  `clearGroup(group)` を使う**。clear() は子を外すだけでGPUリソースを解放しないため、
+  つくりなおしのたびに critters/seasonal のメッシュがリークする(過去に発生)。
+- 透明ウィンドウでは、画面全面を覆う半透明レイヤーが合成から抜け落ちて描画されない
+  ことがある。スクショのプレビューモーダルは `transform: translateZ(0)` で合成レイヤーに
+  昇格させて回避している(style.css、消さないこと)。
 
 ### ライティングの流れ
 - weather.js はライトを直接触らず `weather.current`(天気ぶんの明るさ)を持つだけ。
