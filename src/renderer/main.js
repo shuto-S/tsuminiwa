@@ -14,6 +14,7 @@ import { CritterSystem } from './critters.js';
 import { SeasonalEvents } from './seasonal.js';
 import { setupUI, showToast, setWeatherDisplay, setSeasonDisplay } from './ui.js';
 import { t, setLanguage } from './i18n/index.js';
+import { AiClient } from './ai/client.js';
 
 async function loadSave() {
   try {
@@ -66,6 +67,11 @@ async function main() {
   }
   // 保存された言語を反映(以降の t() はこの言語で引かれる)
   setLanguage(state.settings.language);
+
+  // AI クライアント(後続のフレーバー機能が使う。無効/失敗時は null を返す)。
+  // 実生成はメインプロセス(window.tsuminiwa.ai)へ委譲する
+  const ai = new AiClient(state.settings, window.tsuminiwa.ai);
+  void ai; // #1 では配線まで。実フレーバーは #2 で ai.generate/take を使う
 
   const viewport = document.getElementById('viewport');
   const view = new SceneView(viewport, world);

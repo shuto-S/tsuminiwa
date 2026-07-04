@@ -62,7 +62,12 @@ src/renderer/
   ui.js                    DOM イベントの配線 + トースト通知(showToast)・天気表示・ツールチップ
   i18n/index.js            多言語エンジン(t / setLanguage / applyDomTranslations / namesFor)
   i18n/locales/ja.js       日本語辞書(基準)。en.js は英語。LOCALES に足せば言語追加
+  ai/client.js             レンダラー側 AI クライアント(オプトイン判定・レート上限・
+                           プール・失敗時 null)。後続のフレーバー機能はここだけ使う
 ```
+
+このほかリポジトリ直下に `ai/main-service.js`(**メインプロセス側**の Gemini 連携。
+`@google/genai` を遅延 require、キーは safeStorage 暗号化保存、IPC 経由で generate/test)がある。
 
 このほかリポジトリ直下に `build/`(アプリアイコンの元絵と icns)、
 `release/`(パッケージ出力、git 管理外)がある。
@@ -167,6 +172,20 @@ src/renderer/
   旧セーブの日本語ラベルは characters.js の LEGACY_TRAIT/LEGACY_JOB で読み替える。
 - キャラ名は言語ごとの名前プール(namesFor)から採るが、付いた名前は固有名として保存され、
   言語を変えても変わらない(混在は仕様)。初回起動のみ OS 言語で既定を決める。
+
+### AI(Gemini)基盤
+- **完全オプトイン**。既定オフ・キー未設定・未同意・オフライン・失敗時は必ず従来動作に
+  フォールバックする(AI は上乗せ)。プロバイダは Gemini、SDK は `@google/genai`。
+  認証は「キーを貼る」2方式のみ: `developer`(AI Studio)/ `vertex-express`(Vertex Express)。
+  フル Vertex(ADC)はやらない。
+- **メインプロセス集約**: SDK と API キーは `ai/main-service.js`(CommonJS)に置く。
+  レンダラーは CSP のため外部 API を叩けず、`window.tsuminiwa.ai`(preload)→ IPC 経由。
+  キーは safeStorage で暗号化保存(world.json には入れない)。
+- **レンダラーからは `ai/client.js` の AiClient だけを使う**。available()/underRate() の
+  ガードと take/fill のプールを通し、生成不可・失敗時は null を返す(呼び出し側でフォールバック)。
+- 生成は現在の言語で(プロンプトに言語を渡す)。モデルは設定で選択(AI_MODELS)。
+- パッケージには本番 node_modules を含める(main が `@google/genai` を実行時 require するため、
+  package スクリプトで `^/node_modules` を ignore しない)。
 
 ### 設定の追加手順
 新しい設定(DEFAULT_SETTINGS のキー)を足すときは4か所:
