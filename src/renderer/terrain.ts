@@ -1,11 +1,30 @@
-import { World } from './world.js';
+import { World } from './world.ts';
+import type { BlockType } from './world.ts';
+
+// worldgen-schema の値(任意)
+export interface WorldGenParams {
+  waterLevel: number;
+  hilliness: number;
+  sandiness: number;
+  treeDensity: number;
+  flowerDensity: number;
+  snow: number;
+}
+
+// 木の1ブロックぶんの設置情報
+interface TreeBlock {
+  col: number;
+  row: number;
+  y: number;
+  type: BlockType;
+}
 
 // なだらかな地形をつくる簡易バリューノイズ
-function makeNoise(cols, rows) {
+function makeNoise(cols: number, rows: number): (col: number, row: number) => number {
   const size = 6;
   const grid = Array.from({ length: size * size }, () => Math.random());
-  const at = (x, y) => grid[Math.min(size - 1, y) * size + Math.min(size - 1, x)];
-  return (col, row) => {
+  const at = (x: number, y: number): number => grid[Math.min(size - 1, y) * size + Math.min(size - 1, x)];
+  return (col: number, row: number): number => {
     const fx = (col / Math.max(1, cols - 1)) * (size - 1);
     const fy = (row / Math.max(1, rows - 1)) * (size - 1);
     const x0 = Math.floor(fx);
@@ -21,7 +40,12 @@ function makeNoise(cols, rows) {
 }
 
 // params(任意): worldgen-schema の値。無ければ既定で従来どおりの生成。
-export function generateWorld(cols, rows, maxHeight, params = null) {
+export function generateWorld(
+  cols: number,
+  rows: number,
+  maxHeight: number,
+  params: WorldGenParams | null = null
+): World {
   const world = new World(cols, rows, maxHeight);
   const noise = makeNoise(cols, rows);
 
@@ -86,13 +110,13 @@ export function generateWorld(cols, rows, maxHeight, params = null) {
 }
 
 // 幹2〜3段 + 中心と隣接マスに葉、を積む木
-export function treePlan(world, col, row) {
+export function treePlan(world: World, col: number, row: number): TreeBlock[] | null {
   const base = world.heightAt(col, row);
   const trunkHeight = 2 + Math.floor(Math.random() * 2);
   const canopyY = base + trunkHeight;
   if (canopyY + 1 >= world.maxHeight) return null;
 
-  const blocks = [];
+  const blocks: TreeBlock[] = [];
   for (let y = 0; y < trunkHeight; y++) {
     blocks.push({ col, row, y: base + y, type: 'wood' });
   }
@@ -106,7 +130,7 @@ export function treePlan(world, col, row) {
   return blocks;
 }
 
-export function plantTree(world, col, row) {
+export function plantTree(world: World, col: number, row: number): boolean {
   const plan = treePlan(world, col, row);
   if (!plan) return false;
   for (const b of plan) world.setBlock(b.col, b.row, b.y, b.type);
@@ -116,14 +140,14 @@ export function plantTree(world, col, row) {
 // 幹の柱と樹冠をまとめて消すための一覧(枯れ・伐採で共用)。
 // 隣の葉は「幹に葉がある高さ」と「宙に浮いている葉」の両方を対象にする
 // (斜面では樹冠の葉が地面に接して置かれることがあるため)。
-export function treeRemovalPlan(world, col, row) {
+export function treeRemovalPlan(world: World, col: number, row: number): TreeBlock[] {
   const stack = world.stackAt(col, row);
-  const blocks = [];
-  const canopyLevels = new Set();
+  const blocks: TreeBlock[] = [];
+  const canopyLevels = new Set<number>();
   for (let y = stack.length - 1; y >= 0; y--) {
     if (stack[y] === 'leaves') canopyLevels.add(y);
     if (stack[y] === 'leaves' || stack[y] === 'wood') {
-      blocks.push({ col, row, y, type: stack[y] });
+      blocks.push({ col, row, y, type: stack[y]! });
     }
   }
   for (const [nc, nr] of world.neighbors(col, row)) {
@@ -139,12 +163,12 @@ export function treeRemovalPlan(world, col, row) {
 }
 
 // 「木」の定義: 幹と葉の両方を含む柱(小屋の屋根の木材と区別する)
-export function isTreeColumn(world, col, row) {
+export function isTreeColumn(world: World, col: number, row: number): boolean {
   const stack = world.stackAt(col, row);
   return stack.includes('wood') && stack.includes('leaves');
 }
 
-export function shuffle(array) {
+export function shuffle<T>(array: T[]): T[] {
   for (let i = array.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [array[i], array[j]] = [array[j], array[i]];

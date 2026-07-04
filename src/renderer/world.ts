@@ -1,11 +1,43 @@
-import { BLOCK_TYPES, HEX_RADIUS, HEX_WIDTH, BLOCK_HEIGHT } from './config.js';
+import { BLOCK_TYPES, HEX_RADIUS, HEX_WIDTH, BLOCK_HEIGHT } from './config.ts';
 
 // odd-r オフセット座標(尖った頂点が上下方向の六角形、奇数行が右にずれる)
-const NEIGHBORS_EVEN = [[1, 0], [0, -1], [-1, -1], [-1, 0], [-1, 1], [0, 1]];
-const NEIGHBORS_ODD = [[1, 0], [1, -1], [0, -1], [-1, 0], [0, 1], [1, 1]];
+const NEIGHBORS_EVEN: Array<[number, number]> = [[1, 0], [0, -1], [-1, -1], [-1, 0], [-1, 1], [0, 1]];
+const NEIGHBORS_ODD: Array<[number, number]> = [[1, 0], [1, -1], [0, -1], [-1, 0], [0, 1], [1, 1]];
+
+// マスのブロック種(config の BLOCK_TYPES のキー)。空中は null。
+export type BlockType = string;
+export type BlockCell = BlockType | null;
+export type Coord = [number, number];
+export interface Crop {
+  stage: number; // 0..2
+  t: number; // 経過秒
+}
+export interface Point {
+  x: number;
+  z: number;
+}
+
+export interface SerializedWorld {
+  v: number;
+  cols: number;
+  rows: number;
+  maxHeight: number;
+  stacks: Array<Array<BlockType | 0>>;
+  flowers: string[];
+  crops: Array<[string, Crop]>;
+}
 
 export class World {
-  constructor(cols, rows, maxHeight) {
+  cols: number;
+  rows: number;
+  maxHeight: number;
+  stacks: BlockCell[][];
+  flowers: Set<string>;
+  crops: Map<string, Crop>;
+  frozen: boolean;
+  version: number;
+
+  constructor(cols: number, rows: number, maxHeight: number) {
     this.cols = cols;
     this.rows = rows;
     this.maxHeight = maxHeight;
@@ -17,20 +49,20 @@ export class World {
     this.version = 0; // 変更検知用
   }
 
-  index(col, row) {
+  index(col: number, row: number): number {
     return row * this.cols + col;
   }
 
-  inBounds(col, row) {
+  inBounds(col: number, row: number): boolean {
     return col >= 0 && col < this.cols && row >= 0 && row < this.rows;
   }
 
-  stackAt(col, row) {
+  stackAt(col: number, row: number): BlockCell[] {
     return this.stacks[this.index(col, row)];
   }
 
   // 一番上の非 null ブロックの段。空なら -1
-  topIndex(col, row) {
+  topIndex(col: number, row: number): number {
     const stack = this.stackAt(col, row);
     for (let y = stack.length - 1; y >= 0; y--) {
       if (stack[y]) return y;
@@ -38,16 +70,16 @@ export class World {
     return -1;
   }
 
-  topType(col, row) {
+  topType(col: number, row: number): BlockType | null {
     const top = this.topIndex(col, row);
     return top >= 0 ? this.stackAt(col, row)[top] : null;
   }
 
-  heightAt(col, row) {
+  heightAt(col: number, row: number): number {
     return this.topIndex(col, row) + 1;
   }
 
-  placeTop(col, row, type) {
+  placeTop(col: number, row: number, type: BlockType): boolean {
     if (!this.inBounds(col, row) || !BLOCK_TYPES[type]) return false;
     const stack = this.stackAt(col, row);
     this.trim(stack);
@@ -59,7 +91,7 @@ export class World {
     return true;
   }
 
-  removeTop(col, row) {
+  removeTop(col: number, row: number): boolean {
     if (!this.inBounds(col, row)) return false;
     const key = `${col},${row}`;
     if (this.flowers.has(key)) {
@@ -81,7 +113,7 @@ export class World {
     return true;
   }
 
-  plantCrop(col, row) {
+  plantCrop(col: number, row: number): boolean {
     const key = `${col},${row}`;
     if (this.topType(col, row) !== 'farm' || this.crops.has(key)) return false;
     this.crops.set(key, { stage: 0, t: 0 });
@@ -89,14 +121,14 @@ export class World {
     return true;
   }
 
-  removeCrop(col, row) {
+  removeCrop(col: number, row: number): boolean {
     if (!this.crops.delete(`${col},${row}`)) return false;
     this.version++;
     return true;
   }
 
   // 任意の段に置く(木の葉のように宙に浮かせられる)
-  setBlock(col, row, y, type) {
+  setBlock(col: number, row: number, y: number, type: BlockCell): boolean {
     if (!this.inBounds(col, row) || y < 0 || y >= this.maxHeight) return false;
     const stack = this.stackAt(col, row);
     const prevHeight = this.heightAt(col, row); // 置く前の地表の高さ
@@ -113,7 +145,7 @@ export class World {
     return true;
   }
 
-  replaceTop(col, row, type) {
+  replaceTop(col: number, row: number, type: BlockType): boolean {
     const top = this.topIndex(col, row);
     if (top < 0) return false;
     this.stackAt(col, row)[top] = type;
@@ -125,20 +157,20 @@ export class World {
     return true;
   }
 
-  addFlower(col, row) {
+  addFlower(col: number, row: number): boolean {
     if (!this.inBounds(col, row)) return false;
     this.flowers.add(`${col},${row}`);
     this.version++;
     return true;
   }
 
-  trim(stack) {
+  trim(stack: BlockCell[]): void {
     while (stack.length > 0 && !stack[stack.length - 1]) stack.pop();
   }
 
-  neighbors(col, row) {
+  neighbors(col: number, row: number): Coord[] {
     const offsets = row % 2 === 0 ? NEIGHBORS_EVEN : NEIGHBORS_ODD;
-    const result = [];
+    const result: Coord[] = [];
     for (const [dc, dr] of offsets) {
       const c = col + dc;
       const r = row + dr;
@@ -148,7 +180,7 @@ export class World {
   }
 
   // キャラクターが立てるマスか(水面の上は不可。凍っていれば歩ける)
-  isWalkable(col, row) {
+  isWalkable(col: number, row: number): boolean {
     const top = this.topType(col, row);
     if (top === null) return false;
     if (BLOCK_TYPES[top].water) return this.frozen;
@@ -156,7 +188,7 @@ export class World {
   }
 
   // 家の中心 = 屋根(き)が頭上にあり、まわりの過半にレンガの壁がある柱
-  hutCenters() {
+  hutCenters(): Coord[] {
     return this.columnsWhere((c, r) => {
       if (this.topType(c, r) !== 'wood') return false;
       const walls = this.neighbors(c, r).filter(([nc, nr]) =>
@@ -167,8 +199,8 @@ export class World {
   }
 
   // 六角グリッド上のマス距離
-  distance(c1, r1, c2, r2) {
-    const toCube = (c, r) => {
+  distance(c1: number, r1: number, c2: number, r2: number): number {
+    const toCube = (c: number, r: number): [number, number, number] => {
       const x = c - (r - (r & 1)) / 2;
       return [x, -x - r, r];
     };
@@ -178,7 +210,7 @@ export class World {
   }
 
   // ワールド座標(グリッド中心が原点)
-  positionOf(col, row) {
+  positionOf(col: number, row: number): Point {
     const offsetX = (this.cols - 1 + 0.5) * HEX_WIDTH * 0.5;
     const offsetZ = ((this.rows - 1) * 1.5 * HEX_RADIUS) / 2;
     return {
@@ -187,13 +219,13 @@ export class World {
     };
   }
 
-  topSurfaceY(col, row) {
+  topSurfaceY(col: number, row: number): number {
     return this.heightAt(col, row) * BLOCK_HEIGHT;
   }
 
   // マウス位置(ワールドXZ)から一番近いマスを求める
-  columnAtPoint(x, z) {
-    let best = null;
+  columnAtPoint(x: number, z: number): { col: number; row: number } | null {
+    let best: { col: number; row: number } | null = null;
     let bestDist = HEX_WIDTH * HEX_WIDTH; // 半径 √3R/2 より少し緩め
     for (let row = 0; row < this.rows; row++) {
       for (let col = 0; col < this.cols; col++) {
@@ -210,7 +242,7 @@ export class World {
     return best;
   }
 
-  *columns() {
+  *columns(): Generator<Coord> {
     for (let row = 0; row < this.rows; row++) {
       for (let col = 0; col < this.cols; col++) {
         yield [col, row];
@@ -219,8 +251,8 @@ export class World {
   }
 
   // 条件に合うマスの一覧
-  columnsWhere(predicate) {
-    const result = [];
+  columnsWhere(predicate: (col: number, row: number) => boolean): Coord[] {
+    const result: Coord[] = [];
     for (const [col, row] of this.columns()) {
       if (predicate(col, row)) result.push([col, row]);
     }
@@ -228,11 +260,11 @@ export class World {
   }
 
   // 一番上が type のマスの一覧
-  topsOfType(type) {
+  topsOfType(type: BlockType): Coord[] {
     return this.columnsWhere((col, row) => this.topType(col, row) === type);
   }
 
-  serialize() {
+  serialize(): SerializedWorld {
     return {
       v: 1,
       cols: this.cols,
@@ -244,7 +276,7 @@ export class World {
     };
   }
 
-  static deserialize(data) {
+  static deserialize(data: SerializedWorld): World {
     const world = new World(data.cols, data.rows, data.maxHeight);
     data.stacks.forEach((stack, i) => {
       world.stacks[i] = stack.map((b) => (b && BLOCK_TYPES[b] ? b : null));

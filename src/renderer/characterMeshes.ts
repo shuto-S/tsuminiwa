@@ -2,10 +2,21 @@
 // maker は character(job / variant を参照)を受け取る。
 import * as THREE from 'three';
 
+interface Character {
+  job?: string;
+  variant?: string;
+}
+
 const SHIRT_COLORS = [0xe6704b, 0x4b8fe6, 0x53b86a, 0xd9a441, 0x9a6fd0];
 const CAT_COLORS = [0x3a3a3a, 0xd9a441, 0xe8e2d4, 0x8a7a6a];
 
-function part(geometry, color, x, y, z) {
+function part(
+  geometry: THREE.BufferGeometry,
+  color: number,
+  x: number,
+  y: number,
+  z: number
+): THREE.Mesh {
   const mesh = new THREE.Mesh(
     geometry,
     new THREE.MeshStandardMaterial({ color, roughness: 0.85, flatShading: true })
@@ -15,7 +26,7 @@ function part(geometry, color, x, y, z) {
   return mesh;
 }
 
-function makeVillagerMesh(character) {
+function makeVillagerMesh(character: Character): THREE.Group {
   const group = new THREE.Group();
   const shirt = SHIRT_COLORS[Math.floor(Math.random() * SHIRT_COLORS.length)];
   group.add(part(new THREE.CylinderGeometry(0.045, 0.05, 0.1, 6), 0x5a4632, -0.05, 0.05, 0));
@@ -43,7 +54,7 @@ function makeVillagerMesh(character) {
   return group;
 }
 
-function makeSheepMesh(character) {
+function makeSheepMesh(character: Character): THREE.Group {
   const wool = character.variant === 'black' ? 0x3c3833 : 0xf2efe6;
   const group = new THREE.Group();
   for (const [x, z] of [[-0.08, -0.07], [0.08, -0.07], [-0.08, 0.07], [0.08, 0.07]]) {
@@ -57,7 +68,7 @@ function makeSheepMesh(character) {
   return group;
 }
 
-function makeChickenMesh() {
+function makeChickenMesh(): THREE.Group {
   const group = new THREE.Group();
   const body = part(new THREE.SphereGeometry(0.1, 8, 6), 0xfaf7ef, 0, 0.12, 0);
   body.scale.set(0.9, 1, 1.15);
@@ -69,7 +80,7 @@ function makeChickenMesh() {
 }
 
 // 旅人: マップを通り過ぎていく、蓑と笠のひと
-function makeTravelerMesh() {
+function makeTravelerMesh(): THREE.Group {
   const group = new THREE.Group();
   group.add(part(new THREE.CylinderGeometry(0.045, 0.05, 0.1, 6), 0x4a3f30, -0.05, 0.05, 0));
   group.add(part(new THREE.CylinderGeometry(0.045, 0.05, 0.1, 6), 0x4a3f30, 0.05, 0.05, 0));
@@ -81,7 +92,7 @@ function makeTravelerMesh() {
 }
 
 // しか(低確率の訪問者)
-function makeDeerMesh() {
+function makeDeerMesh(): THREE.Group {
   const group = new THREE.Group();
   for (const [x, z] of [[-0.07, -0.09], [0.07, -0.09], [-0.07, 0.09], [0.07, 0.09]]) {
     group.add(part(new THREE.CylinderGeometry(0.02, 0.02, 0.16, 4), 0x7a5236, x, 0.08, z));
@@ -103,7 +114,7 @@ function makeDeerMesh() {
 }
 
 // ねこ(低確率の訪問者)
-function makeCatMesh() {
+function makeCatMesh(): THREE.Group {
   const fur = CAT_COLORS[Math.floor(Math.random() * CAT_COLORS.length)];
   const group = new THREE.Group();
   const body = part(new THREE.SphereGeometry(0.09, 8, 6), fur, 0, 0.1, 0);

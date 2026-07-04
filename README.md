@@ -68,7 +68,7 @@ npm start        # そのまま起動
 npm run package  # .app を作る(release/ に出力)
 ```
 
-macOS (Apple Silicon) + Node.js 20+ が必要です。
+macOS (Apple Silicon) + Node.js 24+ が必要です(テストが `.ts` を Node ネイティブで読むため)。
 
 ## 🎮 あそびかた
 

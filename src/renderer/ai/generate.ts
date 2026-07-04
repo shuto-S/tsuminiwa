@@ -11,31 +11,33 @@ import {
   cleanLine,
   parseNameList,
   parseParams,
-} from './flavor.js';
-import { describeEvent, describeBlocks } from './registry.js';
-import { WORLDGEN_PARAMS, worldgenSchema, clampParams } from '../worldgen-schema.js';
+} from './flavor.ts';
+import type { MutterCtx, PoemCtx, TaleCtx, ChronicleCtx, NamesCtx } from './flavor.ts';
+import { describeEvent, describeBlocks } from './registry.ts';
+import { WORLDGEN_PARAMS, worldgenSchema, clampParams } from '../worldgen-schema.ts';
+import type { AiClient } from './client.ts';
 
-export async function generateMutter(client, ctx) {
+export async function generateMutter(client: AiClient, ctx: MutterCtx) {
   return cleanLine(await client.generate(mutterRequest(ctx)));
 }
 
-export async function generatePoem(client, kind, ctx) {
+export async function generatePoem(client: AiClient, kind: string, ctx: PoemCtx) {
   // 一句の題材は #5 のイベント descriptor から引く(直書きしない)
   const desc = describeEvent(kind);
   return cleanLine(await client.generate(poemRequest({ ...ctx, subject: desc ? desc.subject : undefined })), 40);
 }
 
-export async function generateTale(client, ctx) {
+export async function generateTale(client: AiClient, ctx: TaleCtx) {
   return cleanLine(await client.generate(taleRequest(ctx)), 40);
 }
 
-export async function generateChronicle(client, events, ctx) {
+export async function generateChronicle(client: AiClient, events: string[], ctx: ChronicleCtx) {
   if (!events || events.length === 0) return null;
   return cleanLine(await client.generate(chronicleRequest(events, ctx)), 70);
 }
 
 // ことばで世界生成: 指示から地形パラメータを作り、クランプして返す(失敗時は null)
-export async function generateWorldParams(client, instruction, ctx) {
+export async function generateWorldParams(client: AiClient, instruction: string, ctx: { lang: string }) {
   const paramDocs = Object.entries(WORLDGEN_PARAMS).map(([key, d]) => ({ key, ...d }));
   const text = await client.generate(
     worldgenRequest(instruction, {
@@ -50,7 +52,7 @@ export async function generateWorldParams(client, instruction, ctx) {
 }
 
 // 名前プールを補充して、追加した名前の配列を返す(失敗時は空配列)
-export async function refillNamePool(client, type, ctx) {
+export async function refillNamePool(client: AiClient, type: string, ctx: NamesCtx) {
   const names = parseNameList(await client.generate(namesRequest(type, ctx)));
   client.fill(`name:${type}`, names);
   return names;

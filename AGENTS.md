@@ -10,70 +10,75 @@
 
 ## コマンド
 
+コードは **TypeScript**。esbuild は型を剥がしてバンドルするだけなので型検査はしない。
+型は `npm run typecheck`(`tsc --noEmit`)で別に見る。
+
 ```sh
 npm install        # 依存インストール(allow-scripts に注意 → DEVELOPMENT.md)
-npm run build      # esbuild で renderer をバンドル(dist/renderer.js)
-npm run watch      # バンドルの watch モード
+npm run build      # esbuild で renderer/main/preload を dist/ にバンドル
+npm run typecheck  # tsc --noEmit(esbuild は型を見ないので必須)
+npm run lint       # ESLint(同名シャドウ・初期化前アクセス等)
+npm run watch      # レンダラーバンドルの watch モード
 npm start          # build + electron 起動
-npm test           # node:test によるユニットテスト(test/*.test.mjs)
+npm test           # node:test。テストは Node ネイティブの型ストリップで .ts を直接読む(Node 24+)
 npm run package    # macOS アプリ化(release/つみにわ-darwin-arm64/つみにわ.app)
 ```
 
 テストは純ロジック(world / terrain / water)を対象にしている。
 `src/renderer/package.json` の `{"type":"module"}` により Node が renderer の
-ESM をそのまま import できる(three に依存しないモジュールだけテスト可能)。
-**world.js や terrain.js のロジックを変えたら `npm test`、描画や振る舞いを変えたら
+`.ts` を ESM として読む(three に依存しないモジュールだけテスト可能)。
+**world.ts や terrain.ts のロジックを変えたら `npm test`、描画や振る舞いを変えたら
 実際に起動して確認する**(`ELECTRON_ENABLE_LOGGING=1 npx electron .` で
-レンダラーのコンソールも標準出力に出る)。
+レンダラーのコンソールも標準出力に出る)。型を変えたら `npm run typecheck`。
 時間系の機能は設定の「1日の長さ」「天気の変わる間隔」を最短にすると早く確認できる。
 
 ## アーキテクチャ
 
 ```
-main.js                    Electron メイン。透明・フレームレス・常時最前面ウィンドウ、
+main.ts                    Electron メイン。透明・フレームレス・常時最前面ウィンドウ、
                            world.json の読み書き・スクショ保存(ピクチャ/つみにわ)・
                            Xシェア(クリップボード+web intent)・自動起動の IPC
-preload.js                 contextBridge で window.tsuminiwa を公開(loadWorld/saveWorld/quit/setPinned)
+preload.ts                 contextBridge で window.tsuminiwa を公開(loadWorld/saveWorld/quit/setPinned)
 index.html / style.css     UI の DOM。トップバー(-webkit-app-region: drag)、パレット、設定パネル
 src/renderer/
-  main.js                  エントリポイント。セーブ読込→各モジュール初期化→入力→rAF ループ
-  config.js                寸法定数・BLOCK_TYPES(ブロック定義)・キャラ種別
-  world.js                 World クラス。六角グリッドのデータモデル(描画と完全分離)。
+  main.ts                  エントリポイント。セーブ読込→各モジュール初期化→入力→rAF ループ
+  config.ts                寸法定数・BLOCK_TYPES(ブロック定義)・キャラ種別
+  world.ts                 World クラス。六角グリッドのデータモデル(描画と完全分離)。
                            マス走査は columnsWhere(fn) / topsOfType(type) を使う(手書きループ禁止)
-  terrain.js               初期地形生成(バリューノイズ)、木のプラン
+  terrain.ts               初期地形生成(バリューノイズ)、木のプラン
                            (treePlan / treeRemovalPlan / isTreeColumn — 枯れと伐採で共用)
-  characterMeshes.js       キャラの見た目(MAKERS)。job/variant で衣装・持ち物が変わる
-  three-utils.js           clearGroup()/disposeObject() — グループを作り直す前にGPU解放。
+  characterMeshes.ts       キャラの見た目(MAKERS)。job/variant で衣装・持ち物が変わる
+  three-utils.ts           clearGroup()/disposeObject() — グループを作り直す前にGPU解放。
                            マテリアルの .map(共有テクスチャ)は破棄しないので共有キャッシュは安全
-  scene3d.js               SceneView クラス。Three.js の描画すべて(カメラ・ライト・InstancedMesh・ピッキング)
-  characters.js            Character / CharacterManager。自律移動するキャラ(villager/sheep/chicken)
-  autopilot.js             自動発展ルール(草の伝播・花・木・雪・小屋の建設キュー、天気・季節連動)
-  weather.js               天気システム(はれ/くもり/あめ/ゆき)。雲・雨・雪のパーティクル、
+  scene3d.ts               SceneView クラス。Three.js の描画すべて(カメラ・ライト・InstancedMesh・ピッキング)
+  characters.ts            Character / CharacterManager。自律移動するキャラ(villager/sheep/chicken)
+  autopilot.ts             自動発展ルール(草の伝播・花・木・雪・小屋の建設キュー、天気・季節連動)
+  weather.ts               天気システム(はれ/くもり/あめ/ゆき)。雲・雨・雪のパーティクル、
                            雨の水たまり、雨あがりの虹。明るさは current に持つだけ(下記)
-  daynight.js              昼夜サイクル。weather.current と掛け合わせてライトに適用する唯一の場所
-  water.js                 水の伝播シミュレーション(低い方へ流れ、平地は MAX_SPREAD マスまで)
-  aging.js                 時のうつろい。たきび燃え尽き→灰→消滅、花の寿命、木の立ち枯れ、家の崩落。
+  daynight.ts              昼夜サイクル。weather.current と掛け合わせてライトに適用する唯一の場所
+  water.ts                 水の伝播シミュレーション(低い方へ流れ、平地は MAX_SPREAD マスまで)
+  aging.ts                 時のうつろい。たきび燃え尽き→灰→消滅、花の寿命、木の立ち枯れ、家の崩落。
                            年齢は保存されない(再起動でリセット)。分解は queue で1ブロックずつ
-  critters.js              観賞用の生き物・空(鳥の群れ・蝶・魚・ほたる・落ち葉・水鳥・ながれぼし)。
+  critters.ts              観賞用の生き物・空(鳥の群れ・蝶・魚・ほたる・落ち葉・水鳥・ながれぼし)。
                            世界に影響しない
-  audio.js                 環境音。音声ファイルなし、すべて Web Audio でプロシージャル生成
+  audio.ts                 環境音。音声ファイルなし、すべて Web Audio でプロシージャル生成
                            (雨・風ノイズ、鳥チャープ、虫パルス、たきびクラックル)。
                            settings.sound オフで AudioContext を suspend
-  ui.js                    DOM イベントの配線 + トースト通知(showToast)・天気表示・ツールチップ
-  i18n/index.js            多言語エンジン(t / setLanguage / applyDomTranslations / namesFor)
-  i18n/locales/ja.js       日本語辞書(基準)。en.js は英語。LOCALES に足せば言語追加
-  ai/client.js             レンダラー側 AI クライアント(オプトイン判定・レート上限・
+  ui.ts                    DOM イベントの配線 + トースト通知(showToast)・天気表示・ツールチップ
+  i18n/index.ts            多言語エンジン(t / setLanguage / applyDomTranslations / namesFor)
+  i18n/locales/ja.ts       日本語辞書(基準)。en.ts は英語。LOCALES に足せば言語追加
+  ai/client.ts             レンダラー側 AI クライアント(オプトイン判定・レート上限・
                            プール・失敗時 null)。フレーバー機能はここだけ使う
-  ai/flavor.js             プロンプト生成の純ロジック(mutter/poem/tale/chronicle/names/worldgen)
+  ai/flavor.ts             プロンプト生成の純ロジック(mutter/poem/tale/chronicle/names/worldgen)
                            + cleanLine/parseNameList/parseParams。テスト test/ai-flavor.test.mjs
-  ai/generate.js           生成オーケストレーション(prompt→generate→整形)。main はこれを呼ぶだけ
-  ai/registry.js           自己記述層(#5): describeBlocks / イベント descriptor /
+  ai/generate.ts           生成オーケストレーション(prompt→generate→整形)。main はこれを呼ぶだけ
+  ai/registry.ts           自己記述層(#5): describeBlocks / イベント descriptor /
                            アクションレジストリ / worldManifest。新要素は説明1行 or 登録1つ
-  ai/observe.js            observeWorld: 世界を汎用に走査して観測を作る(#4 が使う)
-  worldgen-schema.js       ことばで世界生成のパラメータ定義・スキーマ・clampParams(#3)
+  ai/observe.ts            observeWorld: 世界を汎用に走査して観測を作る(#4 が使う)
+  worldgen-schema.ts       ことばで世界生成のパラメータ定義・スキーマ・clampParams(#3)
 ```
 
-このほかリポジトリ直下に `ai/main-service.js`(**メインプロセス側**の Gemini 連携。
+このほかリポジトリ直下に `ai/main-service.ts`(**メインプロセス側**の Gemini 連携。
 `@google/genai` を遅延 require、キーは safeStorage 暗号化保存、IPC 経由で generate/test)がある。
 
 このほかリポジトリ直下に `build/`(アプリアイコンの元絵と icns)、
@@ -83,14 +88,14 @@ src/renderer/
 **トップレベル await は使えない**(async main() で包む)。nodeIntegration は無効、
 メインプロセスへのアクセスは `window.tsuminiwa` 経由のみ。
 
-各システムは main.js の rAF ループから毎フレーム update(dt) される独立クラスで、
-相互参照は main.js が注入する(autopilot.weather、weather.calendar など)。
+各システムは main.ts の rAF ループから毎フレーム update(dt) される独立クラスで、
+相互参照は main.ts が注入する(autopilot.weather、weather.calendar など)。
 グリッドサイズ変更時は全システムの setWorld(world) が呼ばれる —
 **新システムを足すときは regenerate コールバックへの setWorld 追加を忘れない**。
 
 ## 重要な設計ポイント
 
-### 六角グリッド(world.js)
+### 六角グリッド(world.ts)
 - **odd-r オフセット座標**(尖った頂点が上下の pointy-top、奇数行が右に半マスずれる)。
   隣接マスのオフセットは行の偶奇で異なる(`NEIGHBORS_EVEN` / `NEIGHBORS_ODD`)。
 - 各マスは `stacks[row * cols + col]` のブロック種配列。**null は空中**を表し、
@@ -100,7 +105,7 @@ src/renderer/
   **World を変更するメソッドは必ず version++ すること。**
 - 花(flowers)はブロックではなく `Set<"col,row">` の飾りレイヤー。ブロックを置くと消える。
 
-### 描画(scene3d.js)
+### 描画(scene3d.ts)
 - ブロックは 2 つの InstancedMesh(不透明・水)。毎回全再構築で十分速い(15×15×8 ≦ 1800個)。
 - 花とたきびは数が少ないので通常メッシュの詳細モデル(makeFlower / makeCampfire)。
   共有ジオメトリ・マテリアルは buildDecorAssets() に集約(setWorld をまたいで使い回す)。
@@ -114,7 +119,7 @@ src/renderer/
 - rebuild の最後で InstancedMesh の `boundingSphere = null` にしている。
   **これを消すと、高く積んだブロックがレイキャストに当たらなくなる**(境界球が古いままのため)。
 - キャラのメッシュはパーツごとに固有ジオメトリ/マテリアルを持つので、シーンから
-  外すとき必ず characters.js の disposeMesh() を通す(常駐アプリのGPUリーク防止)。
+  外すとき必ず characters.ts の disposeMesh() を通す(常駐アプリのGPUリーク防止)。
   卵・花・たきび・作物は共有アセットなので破棄しない。
 - **Group を作り直す setWorld では `group.clear()` ではなく three-utils の
   `clearGroup(group)` を使う**。clear() は子を外すだけでGPUリソースを解放しないため、
@@ -124,14 +129,14 @@ src/renderer/
   昇格させて回避している(style.css、消さないこと)。
 
 ### ライティングの流れ
-- weather.js はライトを直接触らず `weather.current`(天気ぶんの明るさ)を持つだけ。
-  毎フレーム daynight.js が `weather.current × 昼夜係数` を計算して view.sun / view.ambient に
+- weather.ts はライトを直接触らず `weather.current`(天気ぶんの明るさ)を持つだけ。
+  毎フレーム daynight.ts が `weather.current × 昼夜係数` を計算して view.sun / view.ambient に
   適用する。**ライトへの書き込みは daynight.update に集約すること**(取り合いになるため)。
   例外: たきびの PointLight(scene3d)と家のあかり(view.nightGlow 経由)。
 
 ### 季節(カレンダー)
-- daynight.js が day(経過日数)を持ち、DAYS_PER_SEASON 日ごとに SEASONS(config.js)がめぐる。
-- 季節の適用は main.js の applySeason() に集約: 葉と草の色(view.seasonColors)、
+- daynight.ts が day(経過日数)を持ち、DAYS_PER_SEASON 日ごとに SEASONS(config.ts)がめぐる。
+- 季節の適用は main.ts の applySeason() に集約: 葉と草の色(view.seasonColors)、
   池の凍結(world.frozen)、表示、トースト。weather.calendar / autopilot.calendar にも
   daynight を注入して、天気の重みや植生の挙動を季節で変えている。
 - world.frozen 中は WaterSim を止める(main 側で gate)。isWalkable は凍結水面を歩行可にする。
@@ -161,22 +166,22 @@ src/renderer/
 ### レアイベント(ネタバレ注意)
 - 低確率・超低確率の訪問者やできごとが存在するが、**プレイヤーの楽しみを守るため
   種類・確率はドキュメントに書かない**(README でも「ひみつ」とだけ匂わせている)。
-  実装は critters.js と characters.js の低確率ロール+トースト通知のパターンを参照。
+  実装は critters.ts と characters.ts の低確率ロール+トースト通知のパターンを参照。
   新しいレアを足すときも同じパターンに倣い、ドキュメントには具体を書かないこと。
 
 ### 多言語(i18n)
 - ユーザーに見える文字列は**必ず `t('key', params)` 経由**にする。直書き禁止。
-  辞書は `i18n/locales/{ja,en}.js`(フラットなキー→文字列、`{name}` を params で差し替え)。
-- 言語を増やすときは locale ファイルを足して `i18n/index.js` の LOCALES に登録するだけ。
+  辞書は `i18n/locales/{ja,en}.ts`(フラットなキー→文字列、`{name}` を params で差し替え)。
+- 言語を増やすときは locale ファイルを足して `i18n/index.ts` の LOCALES に登録するだけ。
   設定の言語セレクタにも自動で並ぶ。
 - 静的な DOM は index.html に `data-i18n`(テキスト)/ `data-i18n-title`(ツールチップ)を付け、
   `applyDomTranslations()` が流し込む。動的な文字列(トースト・roster・天気/季節表示)は
-  生成時に t() を呼ぶ。言語切替時は ui.js が applyDomTranslations + パレット/スライダー/
+  生成時に t() を呼ぶ。言語切替時は ui.ts が applyDomTranslations + パレット/スライダー/
   roster を引き直し、main が天気・季節表示を引き直す。
 - **キーで持つべきもの**(表示名を辞書に、コードは言語非依存キーで扱う):
   BLOCK_TYPES(block.<key>)、SEASONS(season.<key>)、weather KINDS(weather.<state>)、
   TRAITS(trait.<key>)、JOBS(job.<key>)。**serialize は trait/job のキーで保存**し、
-  旧セーブの日本語ラベルは characters.js の LEGACY_TRAIT/LEGACY_JOB で読み替える。
+  旧セーブの日本語ラベルは characters.ts の LEGACY_TRAIT/LEGACY_JOB で読み替える。
 - キャラ名は言語ごとの名前プール(namesFor)から採るが、付いた名前は固有名として保存され、
   言語を変えても変わらない(混在は仕様)。初回起動のみ OS 言語で既定を決める。
 
@@ -185,21 +190,21 @@ src/renderer/
   フォールバックする(AI は上乗せ)。プロバイダは Gemini、SDK は `@google/genai`。
   認証は「キーを貼る」2方式のみ: `developer`(AI Studio)/ `vertex-express`(Vertex Express)。
   フル Vertex(ADC)はやらない。
-- **メインプロセス集約**: SDK と API キーは `ai/main-service.js`(CommonJS)に置く。
+- **メインプロセス集約**: SDK と API キーは `ai/main-service.ts`(CommonJS)に置く。
   レンダラーは CSP のため外部 API を叩けず、`window.tsuminiwa.ai`(preload)→ IPC 経由。
   キーは safeStorage で暗号化保存(world.json には入れない)。
-- **レンダラーからは `ai/client.js` の AiClient だけを使う**。available()/underRate() の
+- **レンダラーからは `ai/client.ts` の AiClient だけを使う**。available()/underRate() の
   ガードと take/fill のプールを通し、生成不可・失敗時は null を返す(呼び出し側でフォールバック)。
 - 生成は現在の言語で(プロンプトに言語を渡す)。モデルは設定で選択(AI_MODELS)。
 - パッケージには本番 node_modules を含める(main が `@google/genai` を実行時 require するため、
   package スクリプトで `^/node_modules` を ignore しない)。
-- **フレーバー機能(main.js が配線)**: 住民のつぶやき(updateMutters→characters.speak)、
+- **フレーバー機能(main.ts が配線)**: 住民のつぶやき(updateMutters→characters.speak)、
   レアに一句/旅人の小話(各システムの `onFlavor?.(kind)` → main の onFlavor)、
   朝のかわら版(notify で当日イベントを貯め、日付ロールオーバーで chronicle 生成)、
   AI命名(ai のプール `name:<type>` を背景補充し characters.aiNamePool.take が優先)。
   すべて ai.available()/ai.generate の null フォールバックで、AI 無効時は従来動作。
-  新しいフレーバーを足すときも「プロンプトは flavor.js の純関数 + main で配線 + null 時は何もしない」。
-- **自己記述層(#5)= ai/registry.js が単一の真実の source**。新ブロックは BLOCK_DESC に1行、
+  新しいフレーバーを足すときも「プロンプトは flavor.ts の純関数 + main で配線 + null 時は何もしない」。
+- **自己記述層(#5)= ai/registry.ts が単一の真実の source**。新ブロックは BLOCK_DESC に1行、
   新イベントは registerEvent、新アクションは registerAction すれば、フレーバー(一句)/世界生成/
   エージェント(#4)が**追加コードなしで**対応する。イベント種を flavor に直書きしないこと。
   #4 のエージェントは actionFunctionDeclarations() を Gemini の function calling に渡し、
@@ -207,10 +212,10 @@ src/renderer/
 
 ### 設定の追加手順
 新しい設定(DEFAULT_SETTINGS のキー)を足すときは4か所:
-1. `config.js` の DEFAULT_SETTINGS にデフォルト値
+1. `config.ts` の DEFAULT_SETTINGS にデフォルト値
 2. `index.html` の設定パネルにスライダー or チェックボックス
-3. `ui.js` で bindSlider / bindCheckbox
-4. 即時反映が必要なら `main.js` の settingChanged に分岐
+3. `ui.ts` で bindSlider / bindCheckbox
+4. 即時反映が必要なら `main.ts` の settingChanged に分岐
 (各システムが settings オブジェクトへの参照を持っているので、値の読み取りだけなら 4 は不要)
 
 ### セーブ
@@ -233,14 +238,14 @@ src/renderer/
 - CSP が `default-src 'self'` なので外部 CDN やインライン script は読めない。
 - `npm run package` 時に electron-packager が `.icon`(Icon Composer 形式)の
   WARNING を出すが、icns 自体は適用されているので無視してよい。
-- 環境音は Web Audio 生成(audio.js)。Electron は autoplay 制限がないので
+- 環境音は Web Audio 生成(audio.ts)。Electron は autoplay 制限がないので
   ユーザー操作なしで AudioContext を開始できる(ブラウザに移植するときは注意)。
 
 ## コード規約
 
 - UI 文言・ゲーム内の名前は日本語(ひらがな中心のやわらかいトーン)。
 - コメントは日本語で、コードから読み取れない意図だけを書く。
-- データモデル(world.js)と描画(scene3d.js)の分離を守る。
-  ゲームルールの追加は autopilot.js / world.js 側へ、見た目は scene3d.js / characters.js 側へ。
-- ブロック種の追加は `config.js` の BLOCK_TYPES に足すだけでパレット・描画・保存に反映される
-  (水のような特殊挙動が必要なら scene3d.js / world.js の water 分岐を参照)。
+- データモデル(world.ts)と描画(scene3d.ts)の分離を守る。
+  ゲームルールの追加は autopilot.ts / world.ts 側へ、見た目は scene3d.ts / characters.ts 側へ。
+- ブロック種の追加は `config.ts` の BLOCK_TYPES に足すだけでパレット・描画・保存に反映される
+  (水のような特殊挙動が必要なら scene3d.ts / world.ts の water 分岐を参照)。

@@ -1,12 +1,40 @@
-import { treePlan, shuffle, isTreeColumn } from './terrain.js';
-import { t } from './i18n/index.js';
+import { treePlan, shuffle, isTreeColumn } from './terrain.ts';
+import { t } from './i18n/index.ts';
+import type { World, BlockType, Coord } from './world.ts';
+import type { Settings } from './config.ts';
 
 const PLAN_INTERVAL = 2.2; // 次のできごとを考えるまでの間隔
 const BUILD_INTERVAL = 0.28; // 建設中の1ブロックごとの間隔
 
+interface BlockPlacement {
+  col: number;
+  row: number;
+  y: number;
+  type: BlockType;
+}
+
+interface WeatherLike {
+  state: string;
+}
+
+interface CalendarLike {
+  season: { key: string };
+}
+
 // 自動発展モード: 草がひろがり、花が咲き、木が育ち、ひとが家を建てる
 export class Autopilot {
-  constructor(world, characterManager, settings) {
+  world: World;
+  characters: any;
+  settings: Settings;
+  enabled: boolean;
+  queue: BlockPlacement[];
+  queueLabel: string | null;
+  timer: number;
+  weather: WeatherLike | null;
+  calendar: CalendarLike | null;
+  onEvent: ((text: string) => void) | null;
+
+  constructor(world: World, characterManager: any, settings: Settings) {
     this.world = world;
     this.characters = characterManager;
     this.settings = settings;
@@ -19,14 +47,14 @@ export class Autopilot {
     this.onEvent = null;
   }
 
-  setWorld(world) {
+  setWorld(world: World): void {
     this.world = world;
     this.queue = [];
     this.queueLabel = null;
     this.timer = 0;
   }
 
-  update(dt) {
+  update(dt: number): void {
     if (!this.enabled) return;
     this.timer += dt;
     const base = this.queue.length > 0 ? BUILD_INTERVAL : PLAN_INTERVAL;
@@ -35,7 +63,7 @@ export class Autopilot {
     this.timer = 0;
 
     if (this.queue.length > 0) {
-      const b = this.queue.shift();
+      const b = this.queue.shift()!;
       this.world.setBlock(b.col, b.row, b.y, b.type);
       if (this.queue.length === 0 && this.queueLabel) {
         if (this.onEvent) this.onEvent(this.queueLabel);
@@ -46,7 +74,7 @@ export class Autopilot {
     this.plan();
   }
 
-  plan() {
+  plan(): void {
     // 天気と季節で世界の育ちかたが変わる
     const weather = this.weather ? this.weather.state : 'sunny';
     const season = this.calendar ? this.calendar.season.key : 'spring';
@@ -77,14 +105,14 @@ export class Autopilot {
   }
 
   // 雪の日: どこかのマスに雪が積もる(積もりすぎない程度に)
-  snowfall() {
+  snowfall(): void {
     const snowy = this.world.topsOfType('snow').length;
     if (snowy > this.world.cols * this.world.rows * 0.15) return;
     const spots = this.world.columnsWhere((c, r) => {
       const top = this.world.topType(c, r);
       return (
         top && top !== 'snow' && top !== 'water' && this.world.heightAt(c, r) < this.world.maxHeight
-      );
+      ) as boolean;
     });
     if (spots.length === 0) return;
     const [c, r] = spots[Math.floor(Math.random() * spots.length)];
@@ -92,18 +120,18 @@ export class Autopilot {
   }
 
   // 晴れの日: 積もった雪がとける
-  meltSnow() {
+  meltSnow(): void {
     const spots = this.world.topsOfType('snow');
     if (spots.length === 0) return;
     const [c, r] = spots[Math.floor(Math.random() * spots.length)];
     this.world.removeTop(c, r);
   }
 
-  grassTops() {
+  grassTops(): Coord[] {
     return this.world.topsOfType('grass');
   }
 
-  spreadGrass() {
+  spreadGrass(): void {
     const candidates = this.world.columnsWhere((c, r) => {
       if (this.world.topType(c, r) !== 'dirt') return false;
       return this.world
@@ -115,7 +143,7 @@ export class Autopilot {
     this.world.replaceTop(c, r, 'grass');
   }
 
-  bloomFlower() {
+  bloomFlower(): void {
     if (this.world.flowers.size >= Math.floor((this.world.cols * this.world.rows) / 9)) return;
     const spots = this.grassTops().filter(([c, r]) => !this.world.flowers.has(`${c},${r}`));
     if (spots.length === 0) return;
@@ -123,7 +151,7 @@ export class Autopilot {
     this.world.addFlower(c, r);
   }
 
-  growTree() {
+  growTree(): void {
     // 冬は木が育たない
     if (this.calendar && this.calendar.season.key === 'winter') return;
     // 小屋の屋根の木材を数えないよう「幹+葉」で判定する
@@ -145,7 +173,7 @@ export class Autopilot {
     }
   }
 
-  capSnow() {
+  capSnow(): void {
     const peaks = this.world.columnsWhere(
       (c, r) =>
         this.world.topType(c, r) === 'stone' &&
@@ -158,8 +186,8 @@ export class Autopilot {
   }
 
   // ひとがいるときだけ、六角リングの小屋を少しずつ建てる
-  buildHut() {
-    const hasVillager = this.characters.characters.some((c) => c.type === 'villager');
+  buildHut(): void {
+    const hasVillager = this.characters.characters.some((c: any) => c.type === 'villager');
     if (!hasVillager) return;
 
     // 建った小屋の数で数える。崩れかけの残骸レンガを数えて建設が
@@ -177,7 +205,7 @@ export class Autopilot {
     }
   }
 
-  hutPlan(col, row) {
+  hutPlan(col: number, row: number): BlockPlacement[] | null {
     const neighbors = this.world.neighbors(col, row);
     if (neighbors.length < 6) return null; // 端は避ける
     const base = this.world.heightAt(col, row);

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { setLanguage } from '../src/renderer/i18n/index.js';
+import { setLanguage } from '../src/renderer/i18n/index.ts';
 import {
   describeBlocks,
   describeEvent,
@@ -11,9 +11,9 @@ import {
   listActions,
   actionFunctionDeclarations,
   worldManifest,
-} from '../src/renderer/ai/registry.js';
-import { observeWorld } from '../src/renderer/ai/observe.js';
-import { World } from '../src/renderer/world.js';
+} from '../src/renderer/ai/registry.ts';
+import { observeWorld } from '../src/renderer/ai/observe.ts';
+import { World } from '../src/renderer/world.ts';
 
 test('describeBlocks: 全ブロックに key/name/desc が付く(言語で name が変わる)', () => {
   setLanguage('en');

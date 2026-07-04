@@ -1,13 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { AiClient } from '../src/renderer/ai/client.js';
+import { AiClient } from '../src/renderer/ai/client.ts';
 import {
   generateMutter,
   generatePoem,
   generateTale,
   generateChronicle,
   refillNamePool,
-} from '../src/renderer/ai/generate.js';
+} from '../src/renderer/ai/generate.ts';
 
 // AIレスポンスをモックする backend。台本(reply)を返し、渡された opts を記録する。
 function mockBackend(reply) {
@@ -47,7 +47,7 @@ test('generatePoem: descriptor から題材を引いて生成する', async () =
 });
 
 test('generatePoem: 新イベントを registerEvent すれば追加コードなしで一句が出る(#5連動)', async () => {
-  const { registerEvent } = await import('../src/renderer/ai/registry.js');
+  const { registerEvent } = await import('../src/renderer/ai/registry.ts');
   registerEvent('rainbowbird', { subject: 'a rainbow-colored bird passing by' });
   const backend = mockBackend((opts) => (opts.prompt.includes('rainbow') ? '🌈 とりのうた' : 'x'));
   const c = new AiClient(enabled, backend, noLimit);

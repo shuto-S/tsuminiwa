@@ -1,5 +1,19 @@
-import { shuffle, treeRemovalPlan, isTreeColumn } from './terrain.js';
-import { t } from './i18n/index.js';
+import { shuffle, treeRemovalPlan, isTreeColumn } from './terrain.ts';
+import { t } from './i18n/index.ts';
+import type { World, BlockType } from './world.ts';
+import type { Settings } from './config.ts';
+
+interface DecayBlock {
+  col: number;
+  row: number;
+  y: number;
+  type: BlockType;
+}
+
+interface AgeEntry {
+  age: number;
+  life: number;
+}
 
 const TICK = 1; // 年齢を進める間隔(秒)
 const DECAY_STEP_INTERVAL = 1.8; // 枯れ・崩れで1ブロック消える間隔
@@ -12,13 +26,22 @@ const HUT_DECAY_CHANCE = 1 / 2400; // 1軒あたり毎秒(期待寿命 約40分)
 
 // 時のうつろい: たきびは燃えつき、花は枯れ、木は立ち枯れ、古い家は崩れる
 export class Aging {
-  constructor(world, settings) {
+  settings: Settings;
+  onEvent: ((text: string) => void) | null;
+  world: World;
+  timer: number;
+  stepTimer: number;
+  ages: Map<string, AgeEntry>;
+  queue: DecayBlock[];
+  queueLabel: string | null;
+
+  constructor(world: World, settings: Settings) {
     this.settings = settings;
     this.onEvent = null;
     this.setWorld(world);
   }
 
-  setWorld(world) {
+  setWorld(world: World): void {
     this.world = world;
     this.timer = 0;
     this.stepTimer = 0;
@@ -27,18 +50,18 @@ export class Aging {
     this.queueLabel = null;
   }
 
-  rand([min, max]) {
+  rand([min, max]: number[]): number {
     return min + Math.random() * (max - min);
   }
 
-  update(dt) {
+  update(dt: number): void {
     if (!this.settings.decay) return;
 
     // 分解キュー(枯れ・崩れは1ブロックずつ進む)
     this.stepTimer += dt;
     if (this.queue.length > 0 && this.stepTimer >= DECAY_STEP_INTERVAL) {
       this.stepTimer = 0;
-      const b = this.queue.shift();
+      const b = this.queue.shift()!;
       // まだ同じブロックがそこにあるときだけ消す(ユーザーが触った場所は尊重)
       if (this.world.inBounds(b.col, b.row) && this.world.stackAt(b.col, b.row)[b.y] === b.type) {
         this.world.setBlock(b.col, b.row, b.y, null);
@@ -55,7 +78,7 @@ export class Aging {
     this.tick();
   }
 
-  tick() {
+  tick(): void {
     this.ageTops('campfire', CAMPFIRE_LIFE, (c, r) => {
       this.world.replaceTop(c, r, 'ash');
       if (this.onEvent) this.onEvent(t('event.agingCampfire'));
@@ -69,7 +92,7 @@ export class Aging {
   }
 
   // 露出している type ブロックの年齢を進め、寿命が来たら expire する
-  ageTops(type, lifeRange, expire) {
+  ageTops(type: BlockType, lifeRange: number[], expire: (c: number, r: number) => void): void {
     const alive = new Set();
     for (const [c, r] of this.world.topsOfType(type)) {
       const key = `${type}:${c},${r}`;
@@ -91,8 +114,8 @@ export class Aging {
     }
   }
 
-  ageFlowers() {
-    const alive = new Set();
+  ageFlowers(): void {
+    const alive = new Set<string>();
     for (const flowerKey of [...this.world.flowers]) {
       const key = `flower:${flowerKey}`;
       alive.add(key);
@@ -114,7 +137,7 @@ export class Aging {
   }
 
   // 木の立ち枯れ: 葉を散らし、幹を上から少しずつ崩す
-  maybeKillTree() {
+  maybeKillTree(): void {
     const trunks = this.world.columnsWhere((c, r) => isTreeColumn(this.world, c, r));
     if (trunks.length === 0 || Math.random() >= trunks.length * TREE_DECAY_CHANCE) return;
 
@@ -124,7 +147,7 @@ export class Aging {
   }
 
   // 家の崩落: 屋根と壁を少しずつ崩す
-  maybeCrumbleHut() {
+  maybeCrumbleHut(): void {
     if (this.queue.length > 0) return;
     const centers = this.world.hutCenters();
     if (centers.length === 0 || Math.random() >= centers.length * HUT_DECAY_CHANCE) return;
@@ -138,7 +161,7 @@ export class Aging {
       // 屋根の高さから2段ぶんだけを崩す(まわりの建物は巻き込まない)
       for (let y = Math.min(ns.length - 1, roofY); y >= Math.max(0, roofY - 2); y--) {
         if (ns[y] === 'brick' || ns[y] === 'wood') {
-          walls.push({ col: nc, row: nr, y, type: ns[y] });
+          walls.push({ col: nc, row: nr, y, type: ns[y] as BlockType });
         }
       }
     }

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { SEASONS, DAYS_PER_SEASON } from './config.js';
+import { SEASONS, DAYS_PER_SEASON } from './config.ts';
 
 const DAY_SUN = new THREE.Color(0xfff3dd);
 const DAWN_SUN = new THREE.Color(0xffb37a);
@@ -9,7 +9,12 @@ const NIGHT_AMBIENT = new THREE.Color(0x7f8fc4);
 // t: 0=日の出, 0.25=正午, 0.5=日の入り, 0.5〜1=夜
 // day: 経過日数。DAYS_PER_SEASON 日ごとに季節がめぐる
 export class DayNight {
-  constructor(view, settings) {
+  view: any;
+  settings: any;
+  t: number;
+  day: number;
+
+  constructor(view: any, settings: any) {
     this.view = view;
     this.settings = settings;
     this.t = 0.1; // 朝からはじまる
@@ -33,7 +38,7 @@ export class DayNight {
   }
 
   // weatherCurrent: WeatherSystem.current(天気ぶんの明るさ)
-  update(dt, weatherCurrent) {
+  update(dt: number, weatherCurrent: { sun: number; ambient: number }) {
     if (this.settings.dayNight) {
       const next = this.t + dt / this.settings.dayLength;
       if (next >= 1) this.day++;

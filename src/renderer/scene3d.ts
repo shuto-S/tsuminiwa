@@ -4,13 +4,81 @@ import {
   FLOWER_COLORS,
   HEX_RADIUS,
   BLOCK_HEIGHT,
-} from './config.js';
+} from './config.ts';
+import type { World } from './world.ts';
 
 const ELEVATION = THREE.MathUtils.degToRad(38); // 斜め上視点の仰角
 const CAMERA_DISTANCE = 40;
 
+type ColRow = { col: number; row: number };
+
+interface SeasonColors {
+  leaves: number;
+  grass: number;
+}
+
+interface Decor {
+  stemGeo: THREE.CylinderGeometry;
+  leafGeo: THREE.SphereGeometry;
+  petalGeo: THREE.SphereGeometry;
+  centerGeo: THREE.SphereGeometry;
+  stemMat: THREE.MeshStandardMaterial;
+  leafMat: THREE.MeshStandardMaterial;
+  centerMat: THREE.MeshStandardMaterial;
+  petalMats: THREE.MeshStandardMaterial[];
+  logGeo: THREE.CylinderGeometry;
+  stoneGeo: THREE.IcosahedronGeometry;
+  flameOuterGeo: THREE.ConeGeometry;
+  flameInnerGeo: THREE.ConeGeometry;
+  smokeGeo: THREE.SphereGeometry;
+  logMat: THREE.MeshStandardMaterial;
+  charMat: THREE.MeshStandardMaterial;
+  stoneMat: THREE.MeshStandardMaterial;
+  flameOuterMat: THREE.MeshBasicMaterial;
+  flameInnerMat: THREE.MeshBasicMaterial;
+  smokeMats: THREE.MeshBasicMaterial[];
+  cropGeos: THREE.CylinderGeometry[];
+  cropMats: THREE.MeshStandardMaterial[];
+}
+
+interface Campfire {
+  outer: THREE.Mesh;
+  inner: THREE.Mesh;
+  smokes: THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>[];
+  light: THREE.PointLight | null;
+  phase: number;
+}
+
 export class SceneView {
-  constructor(container, world) {
+  container: HTMLElement;
+  world: World;
+  azimuth: number;
+  azimuthTarget: number;
+  zoom: number;
+  seasonColors: SeasonColors;
+  nightGlow: number;
+  renderer: THREE.WebGLRenderer;
+  scene: THREE.Scene;
+  camera: THREE.OrthographicCamera;
+  ambient: THREE.AmbientLight;
+  sun: THREE.DirectionalLight;
+  shadowPlane: THREE.Mesh;
+  solidMesh: THREE.InstancedMesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>;
+  waterMesh: THREE.InstancedMesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>;
+  flowerGroup: THREE.Group;
+  campfireGroup: THREE.Group;
+  campfires: Campfire[];
+  hutLightGroup: THREE.Group;
+  hutLights: THREE.PointLight[];
+  solidInfo: ColRow[];
+  waterInfo: ColRow[];
+  decor: Decor;
+  raycaster: THREE.Raycaster;
+  viewSize: number;
+  time: number;
+  ghost: THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>;
+
+  constructor(container: HTMLElement, world: World) {
     this.container = container;
     this.world = world;
     this.azimuth = Math.PI / 6;
@@ -57,7 +125,7 @@ export class SceneView {
     this.rebuild();
   }
 
-  hexGeometry(radiusScale, height) {
+  hexGeometry(radiusScale: number, height: number): THREE.CylinderGeometry {
     return new THREE.CylinderGeometry(
       HEX_RADIUS * radiusScale,
       HEX_RADIUS * radiusScale,
@@ -122,7 +190,7 @@ export class SceneView {
 
   // 花・たきび用の共有ジオメトリとマテリアル(setWorld をまたいで使い回す)
   buildDecorAssets() {
-    const standard = (color, extra = {}) =>
+    const standard = (color: number, extra: THREE.MeshStandardMaterialParameters = {}) =>
       new THREE.MeshStandardMaterial({ color, roughness: 0.9, flatShading: true, ...extra });
     this.decor = {
       // 花
@@ -166,7 +234,7 @@ export class SceneView {
     };
   }
 
-  makeCrop(x, y, z, stage) {
+  makeCrop(x: number, y: number, z: number, stage: number): THREE.Group {
     const d = this.decor;
     const group = new THREE.Group();
     const offsets = [
@@ -184,7 +252,7 @@ export class SceneView {
     return group;
   }
 
-  smokeMaterial(index) {
+  smokeMaterial(index: number): THREE.MeshBasicMaterial {
     const mats = this.decor.smokeMats;
     if (!mats[index]) {
       mats[index] = new THREE.MeshBasicMaterial({
@@ -197,7 +265,7 @@ export class SceneView {
     return mats[index];
   }
 
-  makeFlower(x, y, z, colorIndex) {
+  makeFlower(x: number, y: number, z: number, colorIndex: number): THREE.Group {
     const d = this.decor;
     const group = new THREE.Group();
 
@@ -228,7 +296,7 @@ export class SceneView {
     return group;
   }
 
-  makeCampfire(x, y, z, index) {
+  makeCampfire(x: number, y: number, z: number, index: number): THREE.Group {
     const d = this.decor;
     const group = new THREE.Group();
 
@@ -261,7 +329,7 @@ export class SceneView {
     group.add(outer, inner);
 
     // けむり(3つのループする煙玉)
-    const smokes = [];
+    const smokes: THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>[] = [];
     for (let j = 0; j < 3; j++) {
       const smoke = new THREE.Mesh(d.smokeGeo, this.smokeMaterial(index * 3 + j));
       smokes.push(smoke);
@@ -269,7 +337,7 @@ export class SceneView {
     }
 
     // 最初の数個だけ、夜に効くあかりを灯す
-    let light = null;
+    let light: THREE.PointLight | null = null;
     if (index < 3) {
       light = new THREE.PointLight(0xf29a4a, 3.5, 3.2, 2);
       light.position.y = 0.4;
@@ -290,7 +358,7 @@ export class SceneView {
     this.scene.add(this.ghost);
   }
 
-  setWorld(world) {
+  setWorld(world: World): void {
     this.world = world;
     this.scene.remove(
       this.solidMesh,
@@ -428,20 +496,20 @@ export class SceneView {
     this.camera.updateProjectionMatrix();
   }
 
-  setShadows(enabled) {
+  setShadows(enabled: boolean): void {
     this.sun.castShadow = enabled;
     this.shadowPlane.visible = enabled;
   }
 
-  rotate(steps) {
+  rotate(steps: number): void {
     this.azimuthTarget += (Math.PI / 3) * steps;
   }
 
-  addZoom(delta) {
+  addZoom(delta: number): void {
     this.zoom = THREE.MathUtils.clamp(this.zoom * (1 - delta * 0.001), 0.5, 3);
   }
 
-  update(dt) {
+  update(dt: number): void {
     this.time = (this.time || 0) + dt;
 
     // 水面のゆらぎ(凍っているときは止まる)
@@ -497,7 +565,7 @@ export class SceneView {
 
   // 3Dキャンバスだけを空色の背景に合成してPNGにする(UIは写らない)。
   // ウィンドウが小さくても見栄えするよう、一時的に高解像度で描き直す
-  captureDataUrl(targetWidth = 1280) {
+  captureDataUrl(targetWidth: number = 1280): string {
     const canvas = this.renderer.domElement;
     const aspect = canvas.width / canvas.height;
     const width = targetWidth;
@@ -514,7 +582,7 @@ export class SceneView {
       const out = document.createElement('canvas');
       out.width = width;
       out.height = height;
-      const ctx = out.getContext('2d');
+      const ctx = out.getContext('2d')!;
       const sky = ctx.createLinearGradient(0, 0, 0, height);
       sky.addColorStop(0, '#b8d4ea');
       sky.addColorStop(1, '#8ba8c4');
@@ -531,7 +599,7 @@ export class SceneView {
   }
 
   // 画面座標からマスを求める。ブロック優先、なければ床平面
-  pick(clientX, clientY) {
+  pick(clientX: number, clientY: number): ColRow | null {
     const rect = this.renderer.domElement.getBoundingClientRect();
     const ndc = new THREE.Vector2(
       ((clientX - rect.left) / rect.width) * 2 - 1,
@@ -544,8 +612,8 @@ export class SceneView {
       false
     );
     for (const hit of hits) {
-      if (hit.object === this.solidMesh) return { ...this.solidInfo[hit.instanceId] };
-      if (hit.object === this.waterMesh) return { ...this.waterInfo[hit.instanceId] };
+      if (hit.object === this.solidMesh) return { ...this.solidInfo[hit.instanceId!] };
+      if (hit.object === this.waterMesh) return { ...this.waterInfo[hit.instanceId!] };
       const column = this.world.columnAtPoint(hit.point.x, hit.point.z);
       if (column) return column;
     }
@@ -553,7 +621,7 @@ export class SceneView {
   }
 
   // 置き先プレビュー。mode: 'place' | 'remove' | null
-  setGhost(column, mode, blockType) {
+  setGhost(column: ColRow | null, mode: string | null, blockType: string): void {
     if (!column || !mode || !this.world.inBounds(column.col, column.row)) {
       this.ghost.visible = false;
       return;

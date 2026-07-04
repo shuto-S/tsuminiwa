@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { World } from '../src/renderer/world.js';
+import { World } from '../src/renderer/world.ts';
 
 function makeWorld(cols = 7, rows = 7, maxHeight = 8) {
   return new World(cols, rows, maxHeight);

@@ -3,11 +3,17 @@
 // API キーは safeStorage で暗号化して userData に保存する。
 // @google/genai は遅延 require し、読み込めない/失敗しても呼び出し側でフォールバックできるよう
 // 例外にせず { ok:false, error } を返す。
-const fs = require('fs');
-const path = require('path');
-const { app, safeStorage } = require('electron');
+import fs from 'node:fs';
+import path from 'node:path';
+import { app, safeStorage } from 'electron';
+import type {
+  AiAuthMode,
+  AiGenerateOptions,
+  AiGenerateResult,
+  AiTestResult,
+} from '../src/shared/ipc.ts';
 
-const KEY_FILE = () => path.join(app.getPath('userData'), 'ai-key.enc');
+const KEY_FILE = (): string => path.join(app.getPath('userData'), 'ai-key.enc');
 
 // safeStorage(Keychain 等)が使えない環境向けの保険。署名なしの dev 起動や
 // キーチェーンにアクセスできない端末では isEncryptionAvailable() が false になり、
@@ -15,10 +21,18 @@ const KEY_FILE = () => path.join(app.getPath('userData'), 'ai-key.enc');
 // この目印で始まるファイルは平文とみなす。
 const PLAIN_PREFIX = Buffer.from('tsuminiwa-plain:v1\n');
 
-// (authMode + key)ごとにクライアントをキャッシュ(毎回作らない)
-let cached = null; // { authMode, key, client }
+// @google/genai の型には依存しない(未インストールでも動く設計のため any で扱う)
+type GenAiClient = any;
+interface ClientCache {
+  authMode: AiAuthMode;
+  key: string;
+  client: GenAiClient;
+}
 
-function loadKey() {
+// (authMode + key)ごとにクライアントをキャッシュ(毎回作らない)
+let cached: ClientCache | null = null;
+
+function loadKey(): string | null {
   try {
     const buf = fs.readFileSync(KEY_FILE());
     // 平文フォールバックで保存されたもの
@@ -32,7 +46,7 @@ function loadKey() {
   }
 }
 
-function storeKey(key) {
+export function storeKey(key: string): boolean {
   try {
     fs.mkdirSync(path.dirname(KEY_FILE()), { recursive: true });
     const data = safeStorage.isEncryptionAvailable()
@@ -46,7 +60,7 @@ function storeKey(key) {
   }
 }
 
-function clearKey() {
+export function clearKey(): void {
   try {
     fs.rmSync(KEY_FILE(), { force: true });
   } catch {
@@ -55,17 +69,17 @@ function clearKey() {
   cached = null;
 }
 
-function hasKey() {
+export function hasKey(): boolean {
   return loadKey() !== null;
 }
 
 // authMode: 'developer'(AI Studio のキー)/ 'vertex-express'(Vertex Express のキー)
-function getClient(authMode) {
+function getClient(authMode: AiAuthMode): GenAiClient | null {
   const key = loadKey();
   if (!key) return null;
   if (cached && cached.authMode === authMode && cached.key === key) return cached.client;
 
-  let GoogleGenAI;
+  let GoogleGenAI: any;
   try {
     ({ GoogleGenAI } = require('@google/genai'));
   } catch {
@@ -80,11 +94,11 @@ function getClient(authMode) {
 }
 
 // 1回の生成。opts: { authMode, model, system, prompt, schema, maxOutputTokens, timeoutMs }
-async function generate(opts) {
+export async function generate(opts: AiGenerateOptions): Promise<AiGenerateResult> {
   const client = getClient(opts.authMode || 'developer');
   if (!client) return { ok: false, error: 'no-key-or-sdk' };
 
-  const config = { maxOutputTokens: opts.maxOutputTokens || 256 };
+  const config: Record<string, unknown> = { maxOutputTokens: opts.maxOutputTokens || 256 };
   if (opts.system) config.systemInstruction = opts.system;
   if (opts.schema) {
     config.responseMimeType = 'application/json';
@@ -104,20 +118,20 @@ async function generate(opts) {
   // タイムアウト付きで待つ(遅い時はフォールバックに落とす)
   const timeoutMs = opts.timeoutMs || 12000;
   try {
-    const res = await Promise.race([
+    const res: any = await Promise.race([
       call,
-      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), timeoutMs)),
+      new Promise((_resolve, reject) => setTimeout(() => reject(new Error('timeout')), timeoutMs)),
     ]);
     const text = typeof res.text === 'string' ? res.text : res.text?.();
     if (!text) return { ok: false, error: 'empty' };
     return { ok: true, text: text.trim() };
   } catch (e) {
-    return { ok: false, error: String(e && e.message ? e.message : e) };
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
 
 // 接続テスト(ごく短い呼び出し)
-async function testConnection(opts) {
+export async function testConnection(opts: { authMode?: AiAuthMode; model?: string }): Promise<AiTestResult> {
   if (!hasKey()) return { ok: false, error: 'no-key' };
   const r = await generate({
     authMode: opts.authMode,
@@ -128,5 +142,3 @@ async function testConnection(opts) {
   });
   return r.ok ? { ok: true } : { ok: false, error: r.error };
 }
-
-module.exports = { storeKey, clearKey, hasKey, generate, testConnection };

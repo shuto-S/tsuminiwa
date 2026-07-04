@@ -1,10 +1,63 @@
 // AI フレーバー生成のプロンプトを1か所にまとめる(純ロジック=テスト可能)。
 // 生成そのものは AiClient(=メインプロセス)に委譲する。ここは「何を頼むか」だけ。
 
-const LANG_NAME = { ja: 'Japanese', en: 'English' };
+const LANG_NAME: Record<string, string> = { ja: 'Japanese', en: 'English' };
+
+export interface MutterCtx {
+  lang: string;
+  season: string;
+  weather: string;
+  timeOfDay: string;
+  name: string;
+  job?: string | null;
+  trait?: string | null;
+}
+
+export interface PoemCtx {
+  lang: string;
+  season: string;
+  subject?: string | null;
+}
+
+export interface TaleCtx {
+  lang: string;
+  season: string;
+}
+
+export interface ChronicleCtx {
+  lang: string;
+  season: string;
+  day: number;
+}
+
+export interface NamesCtx {
+  lang: string;
+  season: string;
+}
+
+export interface ParamDoc {
+  key: string;
+  min: number;
+  max: number;
+  default: number;
+  desc: string;
+}
+
+export interface BlockDesc {
+  key: string;
+  name?: string;
+  desc: string;
+}
+
+export interface WorldgenCtx {
+  lang: string;
+  paramDocs?: ParamDoc[];
+  blocks?: BlockDesc[];
+  schema?: unknown;
+}
 
 // 住民のひとりごと。ctx: { season, weather, timeOfDay, name, job, trait, lang }
-export function mutterRequest(ctx) {
+export function mutterRequest(ctx: MutterCtx) {
   const lang = LANG_NAME[ctx.lang] || 'Japanese';
   const system =
     `You write a single, very short line of dialogue (an idle mutter) for a villager ` +
@@ -25,7 +78,7 @@ export function mutterRequest(ctx) {
 
 // レアなできごとに添える一句(俳句/短歌)。subject は #5 の descriptor レジストリから
 // 引いて渡す(直書きしない)。新イベントを registerEvent すれば一句が自動対応する。
-export function poemRequest(ctx) {
+export function poemRequest(ctx: PoemCtx) {
   const lang = LANG_NAME[ctx.lang] || 'Japanese';
   const subject = ctx.subject || 'a quiet, wondrous moment';
   const system =
@@ -38,7 +91,7 @@ export function poemRequest(ctx) {
 }
 
 // 旅人が去るときに置いていく、外の世界の小話(1〜2文)。
-export function taleRequest(ctx) {
+export function taleRequest(ctx: TaleCtx) {
   const lang = LANG_NAME[ctx.lang] || 'Japanese';
   const system =
     `A wandering traveler is leaving a cozy garden village. ` +
@@ -50,7 +103,7 @@ export function taleRequest(ctx) {
 }
 
 // 朝のかわら版: 前日のできごと(文字列配列)を短い日記にまとめる。
-export function chronicleRequest(events, ctx) {
+export function chronicleRequest(events: string[], ctx: ChronicleCtx) {
   const lang = LANG_NAME[ctx.lang] || 'Japanese';
   const system =
     `You are the quiet chronicler of a cozy garden village. ` +
@@ -63,8 +116,8 @@ export function chronicleRequest(events, ctx) {
 }
 
 // 名前プールの補充: 種類ごとに、季節にちなんだ名前を数個 JSON 配列で。
-export function namesRequest(type, ctx) {
-  const kindWord = { villager: 'villagers (people)', sheep: 'sheep', chicken: 'chickens' }[type] || type;
+export function namesRequest(type: string, ctx: NamesCtx) {
+  const kindWord = ({ villager: 'villagers (people)', sheep: 'sheep', chicken: 'chickens' } as Record<string, string>)[type] || type;
   const script = ctx.lang === 'en' ? 'short romanized names' : 'short cute Japanese names (kana)';
   const system =
     `You name characters for a cozy garden game. ` +
@@ -77,7 +130,7 @@ export function namesRequest(type, ctx) {
 
 // ことばで世界生成(#3): 自然言語の指示から、地形パラメータ JSON を作らせる。
 // blocks は #5 の describeBlocks() の結果(利用可能ブロックを LLM に知らせる)。
-export function worldgenRequest(instruction, ctx) {
+export function worldgenRequest(instruction: string, ctx: WorldgenCtx) {
   const lang = LANG_NAME[ctx.lang] || 'Japanese';
   const paramDoc = (ctx.paramDocs || [])
     .map((p) => `${p.key} (${p.min}..${p.max}, default ${p.default}): ${p.desc}`)
@@ -93,7 +146,7 @@ export function worldgenRequest(instruction, ctx) {
 }
 
 // JSON オブジェクトテキストを安全にパース(失敗時は null)
-export function parseParams(text) {
+export function parseParams(text: string | null | undefined) {
   if (!text) return null;
   try {
     const v = JSON.parse(text);
@@ -104,7 +157,7 @@ export function parseParams(text) {
 }
 
 // JSON 配列テキストを安全に配列へ(失敗時は空配列)
-export function parseNameList(text) {
+export function parseNameList(text: string | null | undefined): string[] {
   if (!text) return [];
   try {
     const v = JSON.parse(text);
@@ -115,7 +168,7 @@ export function parseNameList(text) {
 }
 
 // 生成テキストを吹き出し用に整える(引用符除去・改行を潰す・長すぎたら切る)
-export function cleanLine(text, maxLen = 28) {
+export function cleanLine(text: string | null | undefined, maxLen = 28): string | null {
   if (!text) return null;
   let s = String(text).trim().split('\n')[0].trim();
   s = s.replace(/^["'“”「」『』]+/, '').replace(/["'“”「」『』]+$/, '').trim();

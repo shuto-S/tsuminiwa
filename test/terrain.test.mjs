@@ -7,9 +7,9 @@ import {
   treeRemovalPlan,
   isTreeColumn,
   shuffle,
-} from '../src/renderer/terrain.js';
-import { BLOCK_TYPES } from '../src/renderer/config.js';
-import { World } from '../src/renderer/world.js';
+} from '../src/renderer/terrain.ts';
+import { BLOCK_TYPES } from '../src/renderer/config.ts';
+import { World } from '../src/renderer/world.ts';
 
 test('generateWorld: 全マスに地形があり、高さ上限を守る', () => {
   for (let i = 0; i < 5; i++) {

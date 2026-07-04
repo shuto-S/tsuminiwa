@@ -8,7 +8,7 @@ import {
   chronicleRequest,
   namesRequest,
   parseNameList,
-} from '../src/renderer/ai/flavor.js';
+} from '../src/renderer/ai/flavor.ts';
 
 test('mutterRequest: 文脈を含み、言語指定が入る', () => {
   const req = mutterRequest({

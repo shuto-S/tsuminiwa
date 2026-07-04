@@ -2,8 +2,27 @@
 // コンパクトな記述にする。手組みオブジェクトをやめるので、新しいブロック/状態は
 // 追加コードなしで観測に乗る。
 
+import type { World, BlockType } from '../world.ts';
+
+interface ObservedCharacter {
+  name: string;
+  type: string;
+  job?: string | null;
+  trait?: { key: string } | null;
+  col: number;
+  row: number;
+}
+
+interface ObserveCtx {
+  weather?: string | null;
+  season?: string | null;
+  timeOfDay?: string | null;
+  recentEvents?: string[];
+  characters?: ObservedCharacter[];
+}
+
 // character の周囲を観測する。ctx: { weather, season, timeOfDay, recentEvents }
-export function observeWorld(world, character, ctx = {}) {
+export function observeWorld(world: World, character: ObservedCharacter, ctx: ObserveCtx = {}) {
   const self = {
     name: character.name,
     type: character.type,
@@ -15,7 +34,15 @@ export function observeWorld(world, character, ctx = {}) {
 
   // 近傍のマス(隣接)を、一番上のブロック種で汎用に列挙。
   // 新ブロックを足しても topType が返すので自動で乗る。
-  const nearby = [];
+  const nearby: {
+    col: number;
+    row: number;
+    dCol: number;
+    dRow: number;
+    block: BlockType | null;
+    height: number;
+    walkable: boolean;
+  }[] = [];
   for (const [nc, nr] of world.neighbors(character.col, character.row)) {
     nearby.push({
       col: nc,
@@ -29,7 +56,7 @@ export function observeWorld(world, character, ctx = {}) {
   }
 
   // 近くの他のキャラ(あれば)。managerが渡す all から距離で絞る
-  const others = [];
+  const others: { name: string; type: string; distance: number }[] = [];
   if (Array.isArray(ctx.characters)) {
     for (const c of ctx.characters) {
       if (c === character) continue;

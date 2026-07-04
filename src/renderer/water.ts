@@ -1,29 +1,41 @@
+import type { World } from './world.ts';
+
 const MAX_SPREAD = 3; // 平らな場所を水が流れるマス数
 const TICK = 0.35;
+
+interface Flow {
+  col: number;
+  row: number;
+  dist: number;
+}
 
 // 水は低いほうへ流れ、平地では数マスだけ広がる。
 // 段差を落ちた水は新しい水源としてまた広がる(マイクラ風)。
 export class WaterSim {
-  constructor(world) {
+  world: World;
+  timer: number;
+  spreadDist: Map<string, number>;
+
+  constructor(world: World) {
     this.setWorld(world);
   }
 
-  setWorld(world) {
+  setWorld(world: World): void {
     this.world = world;
     this.timer = 0;
     this.spreadDist = new Map(); // "col,row" → 水源からの距離
   }
 
-  update(dt) {
+  update(dt: number): void {
     this.timer += dt;
     if (this.timer < TICK) return;
     this.timer = 0;
     this.step();
   }
 
-  step() {
+  step(): void {
     const world = this.world;
-    const flows = [];
+    const flows: Flow[] = [];
 
     for (const [col, row] of world.columns()) {
       if (world.topType(col, row) !== 'water') continue;
@@ -63,11 +75,11 @@ export class WaterSim {
     }
   }
 
-  serialize() {
+  serialize(): Array<[string, number]> {
     return [...this.spreadDist.entries()];
   }
 
-  load(entries) {
+  load(entries: Array<[string, number]> | null | undefined): void {
     this.spreadDist = new Map(entries || []);
   }
 }
