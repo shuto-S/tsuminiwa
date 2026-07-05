@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { BLOCK_HEIGHT, HEX_RADIUS } from './config.ts';
 import type { Settings } from './config.ts';
 import type { World } from './world.ts';
+import type { WeatherSystem } from './weather.ts';
+import type { DayNight } from './daynight.ts';
 import { clearGroup } from './three-utils.ts';
 
 const BUTTERFLY_COLORS = [0xf2a0c0, 0xf2d54e, 0x9ad4f2, 0xd0a0f2];
@@ -60,8 +62,8 @@ function basicMesh(
 // 眺めて楽しいだけの生き物たち: 鳥の群れ・蝶・池の魚・夜のほたら
 export class CritterSystem {
   scene: THREE.Scene;
-  weather: any;
-  daynight: any;
+  weather: WeatherSystem;
+  daynight: DayNight;
   settings: Settings;
   onRare: ((key: string) => void) | null;
   group: THREE.Group;
@@ -103,8 +105,8 @@ export class CritterSystem {
   constructor(
     scene: THREE.Scene,
     world: World,
-    weather: any,
-    daynight: any,
+    weather: WeatherSystem,
+    daynight: DayNight,
     settings: Settings
   ) {
     this.scene = scene;

@@ -1,6 +1,17 @@
 import * as THREE from 'three';
 import { BLOCK_HEIGHT, HEX_RADIUS } from './config.ts';
-import type { WeatherState } from './config.ts';
+import type { WeatherState, Settings } from './config.ts';
+import type { World } from './world.ts';
+import type { SceneView } from './scene3d.ts';
+import type { DayNight } from './daynight.ts';
+
+// 天気ごとの見た目・光量パラメータ
+interface WeatherKind {
+  emoji: string;
+  sun: number;
+  ambient: number;
+  cloud: number;
+}
 
 const PUDDLE_TOPS = new Set(['grass', 'dirt', 'stone', 'sand', 'ash']);
 const RAINBOW_COLORS = [0xe85a5a, 0xe8a44a, 0xe8d54a, 0x6cc75a, 0x4aa8e8, 0x9a6fd0];
@@ -48,18 +59,18 @@ const RAIN_DROPS = 260;
 const SNOW_FLAKES = 200;
 
 export class WeatherSystem {
-  view: any;
-  settings: any;
-  onChange: (state: WeatherState, kind: any) => void;
+  view: SceneView;
+  settings: Settings;
+  onChange: (state: WeatherState, kind: WeatherKind) => void;
   state: WeatherState;
   timer: number;
   time: number;
-  calendar: any;
+  calendar: DayNight | null;
   current: { sun: number; ambient: number };
   puddleGeo: THREE.CylinderGeometry;
   puddleMat: THREE.MeshStandardMaterial;
   group: THREE.Group;
-  world: any;
+  world: World;
   span: number;
   skyY: number;
   puddles: Puddle[];
@@ -74,7 +85,12 @@ export class WeatherSystem {
   snowData: SnowFlake[];
   snow: THREE.Points;
 
-  constructor(view: any, world: any, settings: any, onChange: (state: WeatherState, kind: any) => void) {
+  constructor(
+    view: SceneView,
+    world: World,
+    settings: Settings,
+    onChange: (state: WeatherState, kind: WeatherKind) => void
+  ) {
     this.view = view;
     this.settings = settings;
     this.onChange = onChange;
@@ -104,7 +120,7 @@ export class WeatherSystem {
     return KINDS[this.state].emoji;
   }
 
-  setWorld(world: any) {
+  setWorld(world: World) {
     this.world = world;
     const spanX = world.cols * HEX_RADIUS * Math.sqrt(3);
     const spanZ = world.rows * HEX_RADIUS * 1.5;
@@ -332,7 +348,7 @@ export class WeatherSystem {
   spawnPuddle() {
     const spots = this.world.columnsWhere(
       (c: number, r: number) =>
-        PUDDLE_TOPS.has(this.world.topType(c, r)) &&
+        PUDDLE_TOPS.has(this.world.topType(c, r) ?? '') &&
         !this.puddles.some((p) => p.col === c && p.row === r)
     );
     if (spots.length === 0) return;

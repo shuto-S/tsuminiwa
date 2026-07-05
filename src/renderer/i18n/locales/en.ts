@@ -69,6 +69,8 @@ export const en = {
   'ai.keyCleared': '🔑 Key cleared',
   'ai.needKey': '⚠️ Save an API key first',
   'ai.needConsent': '⚠️ Consent to sending is required',
+  'ai.errQuota': '⚠️ AI quota looks exhausted. Pausing AI for a while',
+  'ai.errAuth': '⚠️ The AI key looks invalid. Check settings',
   'settings.aiWorldgen': 'Make a world from words',
   'settings.aiWorldgenGo': 'Create',
   'ai.worldgenMaking': '🌏 Imagining a world…',

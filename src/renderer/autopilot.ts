@@ -2,6 +2,7 @@ import { treePlan, shuffle, isTreeColumn } from './terrain.ts';
 import { t } from './i18n/index.ts';
 import type { World, BlockType, Coord } from './world.ts';
 import type { Settings } from './config.ts';
+import type { CharacterManager } from './characters.ts';
 
 const PLAN_INTERVAL = 2.2; // 次のできごとを考えるまでの間隔
 const BUILD_INTERVAL = 0.28; // 建設中の1ブロックごとの間隔
@@ -24,7 +25,7 @@ interface CalendarLike {
 // 自動発展モード: 草がひろがり、花が咲き、木が育ち、ひとが家を建てる
 export class Autopilot {
   world: World;
-  characters: any;
+  characters: CharacterManager;
   settings: Settings;
   enabled: boolean;
   queue: BlockPlacement[];
@@ -34,7 +35,7 @@ export class Autopilot {
   calendar: CalendarLike | null;
   onEvent: ((text: string) => void) | null;
 
-  constructor(world: World, characterManager: any, settings: Settings) {
+  constructor(world: World, characterManager: CharacterManager, settings: Settings) {
     this.world = world;
     this.characters = characterManager;
     this.settings = settings;

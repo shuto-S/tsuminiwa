@@ -4,6 +4,8 @@ import * as THREE from 'three';
 import { HEX_RADIUS, BLOCK_HEIGHT } from './config.ts';
 import type { Settings } from './config.ts';
 import type { World } from './world.ts';
+import type { WeatherSystem } from './weather.ts';
+import type { DayNight } from './daynight.ts';
 import { clearGroup } from './three-utils.ts';
 
 interface SparkleDatum {
@@ -44,8 +46,8 @@ function auroraTexture(): THREE.CanvasTexture {
 
 export class SeasonalEvents {
   scene: THREE.Scene;
-  weather: any;
-  daynight: any;
+  weather: WeatherSystem;
+  daynight: DayNight;
   settings: Settings;
   onRare: ((key: string) => void) | null;
   time: number;
@@ -62,7 +64,7 @@ export class SeasonalEvents {
   sparkleData: SparkleDatum[];
   sparkles: THREE.Points;
 
-  constructor(scene: THREE.Scene, world: World, weather: any, daynight: any, settings: Settings) {
+  constructor(scene: THREE.Scene, world: World, weather: WeatherSystem, daynight: DayNight, settings: Settings) {
     this.scene = scene;
     this.weather = weather;
     this.daynight = daynight;

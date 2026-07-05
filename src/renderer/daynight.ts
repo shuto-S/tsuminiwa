@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { SEASONS, DAYS_PER_SEASON } from './config.ts';
+import type { Settings } from './config.ts';
+import type { SceneView } from './scene3d.ts';
 
 const DAY_SUN = new THREE.Color(0xfff3dd);
 const DAWN_SUN = new THREE.Color(0xffb37a);
@@ -9,12 +11,12 @@ const NIGHT_AMBIENT = new THREE.Color(0x7f8fc4);
 // t: 0=日の出, 0.25=正午, 0.5=日の入り, 0.5〜1=夜
 // day: 経過日数。DAYS_PER_SEASON 日ごとに季節がめぐる
 export class DayNight {
-  view: any;
-  settings: any;
+  view: SceneView;
+  settings: Settings;
   t: number;
   day: number;
 
-  constructor(view: any, settings: any) {
+  constructor(view: SceneView, settings: Settings) {
     this.view = view;
     this.settings = settings;
     this.t = 0.1; // 朝からはじまる

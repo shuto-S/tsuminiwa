@@ -69,6 +69,8 @@ export const ja = {
   'ai.keyCleared': '🔑 キーを消去した',
   'ai.needKey': '⚠️ 先にAPIキーを保存してください',
   'ai.needConsent': '⚠️ 送信への同意が必要です',
+  'ai.errQuota': '⚠️ AIの利用枠が尽きたようです。しばらくAIをお休みします',
+  'ai.errAuth': '⚠️ AIキーが無効なようです。設定を確認してください',
   'settings.aiWorldgen': 'ことばで世界をつくる',
   'settings.aiWorldgenGo': 'つくる',
   'ai.worldgenMaking': '🌏 世界を思い描いている…',

@@ -80,6 +80,8 @@ async function main() {
   // AI クライアント(後続のフレーバー機能が使う。無効/失敗時は null を返す)。
   // 実生成はメインプロセス(window.tsuminiwa.ai)へ委譲する
   const ai = new AiClient(state.settings, window.tsuminiwa.ai);
+  // クォータ枯渇・認証不正のときは一度だけ知らせる(以降しばらく AI は自動でお休み)
+  ai.onNotice = (kind) => showToast(t(kind === 'quota' ? 'ai.errQuota' : 'ai.errAuth'));
 
   const viewport = document.getElementById('viewport')!;
   const view = new SceneView(viewport, world);

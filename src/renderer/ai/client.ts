@@ -13,7 +13,11 @@ import type { AiAuthMode, AiGenerateOptions, AiGenerateResult } from '../../shar
 export const AI_LIMITS = {
   maxPerDay: 200, // 1日あたりの生成回数
   minIntervalMs: 4000, // 連続生成の最小間隔
+  cooldownMs: 30 * 60 * 1000, // ハードエラー(クォータ枯渇・認証不正)後、AI をしばらく止める
 };
+
+// onNotice に渡すハードエラーの種類
+export type AiFailureKind = 'quota' | 'auth';
 
 interface AiBackend {
   hasKey(): Promise<boolean>;
@@ -29,7 +33,7 @@ interface AiClientSettings {
 
 interface AiClientOptions {
   now?: () => number;
-  limits?: typeof AI_LIMITS;
+  limits?: Partial<typeof AI_LIMITS>;
 }
 
 // レートとプールを管理する本体。backend/now を差し替えてテストする。
@@ -42,29 +46,47 @@ export class AiClient {
   day: number;
   countToday: number;
   pools: Map<string, string[]>;
+  cooldownUntil: number; // ハードエラー後、この時刻まで AI を止める
+  onNotice: ((kind: AiFailureKind) => void) | null; // ハードエラーを一度だけ知らせるフック
 
   // settings: 参照を渡す(aiEnabled/aiAuthMode/aiModel/aiConsent を見る)
   // backend: { generate(opts)->Promise<{ok,text}>, hasKey()->Promise<bool> }
   // now: () => ms
-  constructor(settings: AiClientSettings, backend: AiBackend, { now = () => Date.now(), limits = AI_LIMITS }: AiClientOptions = {}) {
+  constructor(settings: AiClientSettings, backend: AiBackend, { now = () => Date.now(), limits }: AiClientOptions = {}) {
     this.settings = settings;
     this.backend = backend;
     this.now = now;
-    this.limits = limits;
+    this.limits = { ...AI_LIMITS, ...limits };
     this.lastCallAt = -Infinity;
     this.day = this.currentDay();
     this.countToday = 0;
     this.pools = new Map(); // kind -> string[]
+    this.cooldownUntil = 0;
+    this.onNotice = null;
   }
 
   currentDay(): number {
     return Math.floor(this.now() / 86400000);
   }
 
-  // AI を使ってよいか(有効・同意・キー・レート上限)
+  // AI を使ってよいか(有効・同意・クールダウン中でない)
   available(): boolean {
     const s = this.settings;
-    return Boolean(s.aiEnabled && s.aiConsent);
+    if (!(s.aiEnabled && s.aiConsent)) return false;
+    if (this.now() < this.cooldownUntil) return false; // ハードエラー後のクールダウン中
+    return true;
+  }
+
+  // 失敗の種類を見て、クォータ枯渇・認証不正などのハードエラーなら AI をしばらく止めて
+  // 一度だけ通知する。タイムアウト・空応答などの一時的失敗は静かにフォールバックする。
+  noteFailure(error: string): void {
+    const e = String(error).toLowerCase();
+    let kind: AiFailureKind | null = null;
+    if (/resource_exhausted|quota|credit|billing|rate.?limit|\b429\b/.test(e)) kind = 'quota';
+    else if (/unauthenticated|permission_denied|api.?key|invalid.*key|\b401\b|\b403\b/.test(e)) kind = 'auth';
+    if (!kind) return;
+    this.cooldownUntil = this.now() + this.limits.cooldownMs;
+    if (this.onNotice) this.onNotice(kind);
   }
 
   underRate(): boolean {
@@ -99,7 +121,9 @@ export class AiClient {
       schema,
       maxOutputTokens,
     });
-    return res && res.ok ? res.text : null;
+    if (res && res.ok) return res.text;
+    if (res && res.error) this.noteFailure(res.error); // ハードエラーならクールダウン+通知
+    return null;
   }
 
   // プールから1件取り出す。空なら null を返し、必要なら refill() で補充する運用。

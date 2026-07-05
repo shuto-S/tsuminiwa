@@ -102,3 +102,44 @@ test('プール: fill/take/size と空のときの null', () => {
   assert.equal(c.take('mutter'), 'b');
   assert.equal(c.take('mutter'), null);
 });
+
+test('ハードエラー(クォータ)でクールダウン+一度だけ通知', async () => {
+  let now = 0;
+  const notices = [];
+  const backend = makeBackend({
+    generate: () => ({ ok: false, error: '{"code":429,"status":"RESOURCE_EXHAUSTED"}' }),
+  });
+  const c = new AiClient(enabled, backend, { now: () => now, limits: { minIntervalMs: 0, cooldownMs: 1000 } });
+  c.onNotice = (kind) => notices.push(kind);
+
+  assert.equal(await c.generate({ prompt: '1' }), null); // 失敗 → クールダウン開始
+  assert.deepEqual(notices, ['quota']);
+  assert.equal(c.available(), false); // クールダウン中は使えない
+  assert.equal(await c.generate({ prompt: '2' }), null); // 叩かない(backend 呼ばれない)
+  assert.equal(backend.calls.length, 1); // 2回目は available() で弾かれ backend 未到達
+  assert.deepEqual(notices, ['quota']); // 通知は一度きり
+
+  now += 1000; // クールダウン明け
+  assert.equal(c.available(), true);
+});
+
+test('認証エラーは auth 種別で通知', async () => {
+  let now = 0;
+  const notices = [];
+  const backend = makeBackend({ generate: () => ({ ok: false, error: 'UNAUTHENTICATED: API key invalid' }) });
+  const c = new AiClient(enabled, backend, { now: () => now, limits: { minIntervalMs: 0, cooldownMs: 1000 } });
+  c.onNotice = (kind) => notices.push(kind);
+  assert.equal(await c.generate({ prompt: 'x' }), null);
+  assert.deepEqual(notices, ['auth']);
+});
+
+test('一時的な失敗(timeout)はクールダウンも通知もしない', async () => {
+  let now = 0;
+  const notices = [];
+  const backend = makeBackend({ generate: () => ({ ok: false, error: 'timeout' }) });
+  const c = new AiClient(enabled, backend, { now: () => now, limits: { minIntervalMs: 0, cooldownMs: 1000 } });
+  c.onNotice = (kind) => notices.push(kind);
+  assert.equal(await c.generate({ prompt: 'x' }), null);
+  assert.deepEqual(notices, []); // 通知なし
+  assert.equal(c.available(), true); // クールダウンに入らない
+});
