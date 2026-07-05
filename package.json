@@ -7,14 +7,14 @@
   "main": "dist/main.js",
   "scripts": {
     "build:renderer": "esbuild src/renderer/main.ts --bundle --outfile=dist/renderer.js --log-level=warning",
-    "build:main": "esbuild main.ts preload.ts --bundle --platform=node --format=cjs --external:electron --external:@google/genai --outdir=dist --log-level=warning",
+    "build:main": "esbuild src/main/main.ts src/main/preload.ts --bundle --platform=node --format=cjs --external:electron --external:@google/genai --outdir=dist --log-level=warning",
     "build": "npm run build:renderer && npm run build:main",
     "watch": "esbuild src/renderer/main.ts --bundle --outfile=dist/renderer.js --watch",
     "typecheck": "tsc --noEmit",
     "start": "npm run build && electron .",
     "lint": "eslint .",
     "test": "node --test test/*.test.mjs",
-    "package": "npm run build && electron-packager . つみにわ --platform=darwin --arch=${npm_config_arch:-arm64} --out=release --overwrite --icon=build/icon.icns --app-bundle-id=dev.amusphere.tsuminiwa --ignore=\"^/src\" --ignore=\"^/ai\" --ignore=\"^/main\\.ts$\" --ignore=\"^/preload\\.ts$\" --ignore=\"^/tsconfig\\.json$\" --ignore=\"^/eslint\\.config\\.js$\" --ignore=\"^/release\" --ignore=\"^/build\" --ignore=\"^/test\" --ignore=\"^/scripts\" --ignore=\"^/docs\" --ignore=\"^/\\.\" --ignore=\"^/AGENTS\\.md\" --ignore=\"^/README\" --ignore=\"^/DEVELOPMENT\\.md\" --ignore=\"^/LICENSE\""
+    "package": "npm run build && electron-packager . つみにわ --platform=darwin --arch=${npm_config_arch:-arm64} --out=release --overwrite --icon=build/icon.icns --app-bundle-id=dev.amusphere.tsuminiwa --ignore=\"^/src\" --ignore=\"^/tsconfig\\.json$\" --ignore=\"^/eslint\\.config\\.js$\" --ignore=\"^/release\" --ignore=\"^/build\" --ignore=\"^/test\" --ignore=\"^/scripts\" --ignore=\"^/docs\" --ignore=\"^/\\.\" --ignore=\"^/AGENTS\\.md\" --ignore=\"^/README\" --ignore=\"^/DEVELOPMENT\\.md\" --ignore=\"^/LICENSE\""
   },
   "dependencies": {
     "@google/genai": "^2.10.0",

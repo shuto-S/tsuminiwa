@@ -12,8 +12,8 @@ import {
 } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
-import { storeKey, clearKey, hasKey, testConnection, generate } from './ai/main-service.ts';
-import type { AiAuthMode, AiGenerateOptions } from './src/shared/ipc.ts';
+import { storeKey, clearKey, hasKey, testConnection, generate } from './ai-service.ts';
+import type { AiAuthMode, AiGenerateOptions } from '../shared/ipc.ts';
 
 const SHARE_TEXT =
   'デスクトップのすみで、ちいさな世界が育っています 🌱 #つみにわ\nhttps://github.com/shuto-S/tsuminiwa';

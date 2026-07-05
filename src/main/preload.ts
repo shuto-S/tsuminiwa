@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import type { AiAuthMode, AiGenerateOptions, TsuminiwaBridge } from './src/shared/ipc.ts';
+import type { AiAuthMode, AiGenerateOptions, TsuminiwaBridge } from '../shared/ipc.ts';
 
 const bridge: TsuminiwaBridge = {
   loadWorld: () => ipcRenderer.invoke('world:load'),

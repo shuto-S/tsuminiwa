@@ -11,7 +11,7 @@ import type {
   AiGenerateOptions,
   AiGenerateResult,
   AiTestResult,
-} from '../src/shared/ipc.ts';
+} from '../shared/ipc.ts';
 
 const KEY_FILE = (): string => path.join(app.getPath('userData'), 'ai-key.enc');
 

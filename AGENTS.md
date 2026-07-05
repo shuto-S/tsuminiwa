@@ -35,11 +35,15 @@ npm run package    # macOS アプリ化(release/つみにわ-darwin-arm64/つみ
 ## アーキテクチャ
 
 ```
-main.ts                    Electron メイン。透明・フレームレス・常時最前面ウィンドウ、
+index.html / style.css     UI の DOM。トップバー(-webkit-app-region: drag)、パレット、設定パネル
+src/main/                  メインプロセス(Node)。esbuild で dist/*.js にバンドル
+  main.ts                  Electron メイン。透明・フレームレス・常時最前面ウィンドウ、
                            world.json の読み書き・スクショ保存(ピクチャ/つみにわ)・
                            Xシェア(クリップボード+web intent)・自動起動の IPC
-preload.ts                 contextBridge で window.tsuminiwa を公開(loadWorld/saveWorld/quit/setPinned)
-index.html / style.css     UI の DOM。トップバー(-webkit-app-region: drag)、パレット、設定パネル
+  preload.ts               contextBridge で window.tsuminiwa を公開(loadWorld/saveWorld/quit/setPinned)
+  ai-service.ts            Gemini 連携。@google/genai を遅延 require、キーは safeStorage 暗号化保存
+src/shared/                メイン・レンダラー両方が使う型
+  ipc.ts                   IPC 境界(window.tsuminiwa)の型定義
 src/renderer/
   main.ts                  エントリポイント。セーブ読込→各モジュール初期化→入力→rAF ループ
   config.ts                寸法定数・BLOCK_TYPES(ブロック定義)・キャラ種別
@@ -77,9 +81,6 @@ src/renderer/
   ai/observe.ts            observeWorld: 世界を汎用に走査して観測を作る(#4 が使う)
   worldgen-schema.ts       ことばで世界生成のパラメータ定義・スキーマ・clampParams(#3)
 ```
-
-このほかリポジトリ直下に `ai/main-service.ts`(**メインプロセス側**の Gemini 連携。
-`@google/genai` を遅延 require、キーは safeStorage 暗号化保存、IPC 経由で generate/test)がある。
 
 このほかリポジトリ直下に `build/`(アプリアイコンの元絵と icns)、
 `release/`(パッケージ出力、git 管理外)がある。
@@ -190,7 +191,7 @@ src/renderer/
   フォールバックする(AI は上乗せ)。プロバイダは Gemini、SDK は `@google/genai`。
   認証は「キーを貼る」2方式のみ: `developer`(AI Studio)/ `vertex-express`(Vertex Express)。
   フル Vertex(ADC)はやらない。
-- **メインプロセス集約**: SDK と API キーは `ai/main-service.ts`(CommonJS)に置く。
+- **メインプロセス集約**: SDK と API キーは `src/main/ai-service.ts` に置く。
   レンダラーは CSP のため外部 API を叩けず、`window.tsuminiwa.ai`(preload)→ IPC 経由。
   キーは safeStorage で暗号化保存(world.json には入れない)。
 - **レンダラーからは `ai/client.ts` の AiClient だけを使う**。available()/underRate() の
@@ -208,7 +209,7 @@ src/renderer/
   新イベントは registerEvent、新アクションは registerAction すれば、フレーバー(一句)/世界生成/
   エージェント(#4)が**追加コードなしで**対応する。イベント種を flavor に直書きしないこと。
   #4 のエージェントは actionFunctionDeclarations() を Gemini の function calling に渡し、
-  observeWorld() で観測を渡す設計(main-service.generate は tools 引数を受ける)。
+  observeWorld() で観測を渡す設計(ai-service.generate は tools 引数を受ける)。
 
 ### 設定の追加手順
 新しい設定(DEFAULT_SETTINGS のキー)を足すときは4か所:

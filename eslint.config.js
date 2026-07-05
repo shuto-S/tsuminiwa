@@ -30,9 +30,9 @@ module.exports = tseslint.config(
   { ignores: ['dist/**', 'release/**', 'node_modules/**'] },
   js.configs.recommended,
 
-  // TypeScript(レンダラー = ブラウザ環境)
+  // TypeScript(レンダラー = ブラウザ環境。shared は型のみだがここに含める)
   {
-    files: ['src/**/*.ts'],
+    files: ['src/renderer/**/*.ts', 'src/shared/**/*.ts'],
     languageOptions: {
       parser: tseslint.parser,
       ecmaVersion: 2022,
@@ -45,7 +45,7 @@ module.exports = tseslint.config(
 
   // TypeScript(メインプロセス・preload・AI サービス = Node 環境)
   {
-    files: ['main.ts', 'preload.ts', 'ai/**/*.ts'],
+    files: ['src/main/**/*.ts'],
     languageOptions: {
       parser: tseslint.parser,
       ecmaVersion: 2022,

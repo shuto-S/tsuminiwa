@@ -43,7 +43,7 @@ npm install
 
 構成メモ:
 - レンダラー: `src/renderer/**/*.ts` → esbuild で `dist/renderer.js`
-- メイン/preload: `main.ts` / `preload.ts`(+ `ai/main-service.ts`)→ esbuild で `dist/*.js`
+- メイン/preload: `src/main/{main,preload,ai-service}.ts` → esbuild で `dist/*.js`
 - IPC 境界の型は `src/shared/ipc.ts` に集約(preload と renderer が共有)
 - `window.tsuminiwa` の型は `src/renderer/global.d.ts`
 
