@@ -136,13 +136,19 @@ export class AiClient {
     // 最小間隔・日次上限をすり抜けてしまう(TOCTOU)
     this.noteCall();
     const provider = this.provider();
-    if (!(await this.backend.hasKey(provider))) return null;
-    const res = await this.backend.generate({
-      ...opts,
-      provider,
-      authMode: this.settings.aiAuthMode,
-      model: this.model(),
-    });
+    let res: AiGenerateResult;
+    try {
+      if (!(await this.backend.hasKey(provider))) return null;
+      res = await this.backend.generate({
+        ...opts,
+        provider,
+        authMode: this.settings.aiAuthMode,
+        model: this.model(),
+      });
+    } catch {
+      // IPC切断やネットワーク層の例外でもゲーム本体へ例外を漏らさない。
+      return null;
+    }
     if (res?.ok) return res;
     if (res?.code === 'quota' || res?.code === 'rate_limit') this.noteFailure('quota');
     else if (res?.code === 'auth') this.noteFailure('auth');

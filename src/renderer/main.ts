@@ -124,6 +124,7 @@ async function main() {
   const dayEvents: string[] = [];
   function notify(text: string) {
     if (dayEvents.length < 30) dayEvents.push(text);
+    characters.rememberEvent(text);
     showToast(text);
   }
   const aging = new Aging(world, state.settings);
@@ -131,6 +132,9 @@ async function main() {
   const critters = new CritterSystem(view.scene, world, weather, daynight, state.settings);
   const seasonal = new SeasonalEvents(view.scene, world, weather, daynight, state.settings);
   const audio = new AmbientAudio(state.settings);
+  characters.canRequestDevelopment = (kind) => kind === 'build_home' && autopilot.canBuildHut();
+  characters.onDevelopmentRequest = (kind) =>
+    kind === 'build_home' ? autopilot.requestBuildHut() : null;
   weather.calendar = daynight;
   autopilot.weather = weather;
   autopilot.calendar = daynight;
@@ -142,6 +146,7 @@ async function main() {
     season: () => daynight.season.key,
     timeOfDay: () => (daynight.isNight ? 'night' : 'day'),
     recentEvents: () => dayEvents,
+    language: () => getLanguage(),
   });
 
   // ---- レアなできごとに AI で一句/小話を添える(#4/#5)。無効・失敗時は何もしない ----
@@ -227,6 +232,8 @@ async function main() {
         name: villager.name,
         job: villager.job || undefined,
         trait: villager.trait.key,
+        goal: villager.mind.goal,
+        memories: villager.mind.memories,
         lang: getLanguage(),
       });
       // まだその村人が手すきで存在していれば喋らせる
@@ -310,6 +317,7 @@ async function main() {
       if (ok) saveFailureShown = false;
     }, 1200);
   }
+  characters.onChanged = scheduleSave;
 
   // 描画済みのワールド版。再生成・Undoからも更新する
   let renderedVersion = -1;

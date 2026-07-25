@@ -3,13 +3,15 @@ import { MAX_CHARACTERS, type Settings, type SeasonKey } from './config.ts';
 import { shuffle, treePlan, treeRemovalPlan, isTreeColumn } from './terrain.ts';
 import { MAKERS } from './characterMeshes.ts';
 import { t, namesFor } from './i18n/index.ts';
+import { addMemory, cleanSpeech, normalizeMind, updateMind, type AgentMind } from './ai/mind.ts';
 import type { World, Coord, BlockCell, BlockType } from './world.ts';
 
 // characters.ts 内でだけ使う形（他ファイルは編集しない方針のためローカル定義）
 type Trait = { key: string; speed: number; idle: number };
 type Task = { kind: string; target: number[] };
 export type VillagerJob = 'lumberjack' | 'farmer' | 'fisher' | 'villager';
-export type AgentActionKey = 'work_lumberjack' | 'work_farmer' | 'work_fisher' | 'take_it_easy';
+export type AgentActionKey =
+  'work_lumberjack' | 'work_farmer' | 'work_fisher' | 'build_home' | 'take_it_easy';
 export interface AgentCandidate {
   name: string;
   type: string;
@@ -17,6 +19,9 @@ export interface AgentCandidate {
   trait: { key: string };
   col: number;
   row: number;
+  goal: string;
+  memories: string[];
+  relationships: Record<string, number>;
 }
 type Vec3 = { x: number; y: number; z: number };
 interface CharacterOpts {
@@ -27,6 +32,7 @@ interface CharacterOpts {
   trait?: Trait;
   variant?: string | null;
   jitter?: number;
+  mind?: Partial<AgentMind>;
 }
 type UpdateCtx = { speed: number; isNight: boolean; festival: boolean };
 interface Egg {
@@ -34,6 +40,8 @@ interface Egg {
   row: number;
   mesh: THREE.Mesh;
   t: number;
+  parentTrait: Trait;
+  parentName: string;
 }
 interface Bubble {
   sprite: THREE.Sprite;
@@ -90,6 +98,7 @@ const GROW_TIME = 240; // 子どもがおとなになるまで(秒)
 const EGG_HATCH_TIME = [90, 180];
 const EGG_RATE = 1 / 240; // にわとり1羽あたり毎秒の産卵確率
 const LAMB_RATE = 1 / 300;
+const VILLAGER_CHILD_RATE = 1 / 1200;
 const BLACK_LAMB_CHANCE = 0.12; // くろいこひつじ(低確率)
 const FESTIVAL_LENGTH = 55; // おまつりの長さ(秒)
 const ANIMAL_FESTIVAL_CHANCE = 0.2; // まれに動物もおまつりに参加する
@@ -210,6 +219,7 @@ class Character {
   stepsRemaining: number;
   done: boolean;
   agentReserved: boolean;
+  mind: AgentMind;
 
   constructor(
     type: string,
@@ -248,6 +258,7 @@ class Character {
       : Infinity;
     this.done = false;
     this.agentReserved = false;
+    this.mind = normalizeMind(opts.mind);
     const p = world.positionOf(col, row);
     this.mesh.position.set(p.x, world.topSurfaceY(col, row), p.z);
     this.mesh.rotation.y = Math.random() * Math.PI * 2;
@@ -399,7 +410,8 @@ class Character {
         this.workDuration = 12 + Math.random() * 8;
       } else {
         this.state = 'working';
-        this.workDuration = this.task!.kind === 'chop' ? 3.5 : 2.2;
+        this.workDuration =
+          this.task!.kind === 'chop' ? 3.5 : this.task!.kind === 'build' ? 5 : 2.2;
       }
       this.progress = 0;
       // 現場のほうを向く
@@ -465,6 +477,7 @@ export class CharacterManager {
   isNight: boolean;
   onEvent: ((text: string) => void) | null;
   onFlavor: ((kind: string) => void) | null;
+  onChanged: (() => void) | null;
   calendar: Calendar | null;
   jobQueue: JobStep[];
   jobStepTimer: number;
@@ -476,6 +489,9 @@ export class CharacterManager {
   greetTimer: number;
   pairCooldowns: Map<string, number>;
   aiNamePool: AiNamePool | null;
+  agentMindActive: boolean;
+  canRequestDevelopment: ((kind: 'build_home') => boolean) | null;
+  onDevelopmentRequest: ((kind: 'build_home') => Coord | null) | null;
 
   constructor(scene: THREE.Scene, world: World, settings: Settings) {
     this.scene = scene;
@@ -486,6 +502,7 @@ export class CharacterManager {
     this.isNight = false;
     this.onEvent = null;
     this.onFlavor = null; // レア(くろいこひつじ)・旅人退場で AI に一句/小話を頼むフック
+    this.onChanged = null;
     this.calendar = null; // main で注入(季節・日数)
     this.jobQueue = []; // きこりの伐採・植樹などを1ブロックずつ反映
     this.jobStepTimer = 0;
@@ -496,6 +513,9 @@ export class CharacterManager {
     this.bubbles = []; // あいさつの吹き出し
     this.greetTimer = 0;
     this.pairCooldowns = new Map(); // "名前|名前" → 最後にあいさつした時刻
+    this.agentMindActive = false;
+    this.canRequestDevelopment = null;
+    this.onDevelopmentRequest = null;
   }
 
   setWorld(world: World) {
@@ -512,6 +532,7 @@ export class CharacterManager {
     this.jobQueue = [];
     this.pairCooldowns.clear(); // 消えたキャラのあいさつ履歴を残さない
     this.festivalActive = false;
+    this.agentMindActive = false;
   }
 
   // 池の氷がとけた春などに、歩けないマスに取り残されたキャラを助ける
@@ -646,6 +667,14 @@ export class CharacterManager {
           c.mesh.rotation.x = 0;
         }
       }
+      if (this.mindFeaturesActive()) {
+        const joiningVillagers = villagers.filter(joinsFestival);
+        for (let i = 0; i < joiningVillagers.length; i++) {
+          for (let j = i + 1; j < joiningVillagers.length; j++) {
+            this.strengthenRelation(joiningVillagers[i], joiningVillagers[j], 1);
+          }
+        }
+      }
       if (this.onEvent) {
         this.onEvent(animalsJoin ? t('event.festivalAnimals') : t('event.festival'));
       }
@@ -676,6 +705,7 @@ export class CharacterManager {
     this.updateGrowth(dt);
     this.updateEggs(dt);
     this.updateBirths(dt);
+    this.updateVillagerBirths(dt);
     this.updateJobs(dt, isNight);
     this.updateCrops(dt);
     this.updateGreetings(dt, time, isNight);
@@ -744,6 +774,8 @@ export class CharacterManager {
         row: hen.row,
         mesh,
         t: EGG_HATCH_TIME[0] + Math.random() * (EGG_HATCH_TIME[1] - EGG_HATCH_TIME[0]),
+        parentTrait: hen.trait,
+        parentName: hen.name,
       });
     }
     for (const egg of [...this.eggs]) {
@@ -768,7 +800,13 @@ export class CharacterManager {
         if (!near) continue; // 歩けるマスが無ければ、かえさず消す
         [hc, hr] = near;
       }
-      const chick = this.spawnAt('chicken', hc, hr, { baby: true });
+      const inherited =
+        this.mindFeaturesActive() && Math.random() < 0.75 ? egg.parentTrait : undefined;
+      const chick = this.spawnAt('chicken', hc, hr, {
+        baby: true,
+        trait: inherited,
+        mind: this.mindFeaturesActive() ? { memories: [`born near ${egg.parentName}`] } : undefined,
+      });
       if (chick && this.onEvent) this.onEvent(t('event.hatch', { name: chick.name }));
     }
   }
@@ -780,7 +818,12 @@ export class CharacterManager {
     if (Math.random() >= LAMB_RATE * dt) return;
     const parent = sheep[Math.floor(Math.random() * sheep.length)];
     const variant = Math.random() < BLACK_LAMB_CHANCE ? 'black' : null;
-    const lamb = this.spawnAt('sheep', parent.col, parent.row, { baby: true, variant });
+    const lamb = this.spawnAt('sheep', parent.col, parent.row, {
+      baby: true,
+      variant,
+      trait: this.mindFeaturesActive() && Math.random() < 0.75 ? parent.trait : undefined,
+      mind: this.mindFeaturesActive() ? { memories: [`born near ${parent.name}`] } : undefined,
+    });
     if (!lamb) return;
     if (variant === 'black' && this.onFlavor) this.onFlavor('blacklamb');
     if (!this.onEvent) return;
@@ -789,6 +832,41 @@ export class CharacterManager {
         ? t('event.lambBlack', { name: lamb.name })
         : t('event.lamb', { name: lamb.name }),
     );
+  }
+
+  // 家に余裕がある村では、ごくまれに子どもが生まれる。性格は親の傾向を受け継ぐ。
+  updateVillagerBirths(dt: number) {
+    if (!this.mindFeaturesActive()) return;
+    const adults = this.characters.filter(
+      (c) => c.type === 'villager' && !c.baby && !VISITOR_TYPES.has(c.type),
+    );
+    const capacity = this.world.hutCenters().length * 2;
+    const residents = this.characters.filter((c) => c.type === 'villager').length;
+    if (adults.length < 2 || residents >= capacity || this.characters.length >= MAX_CHARACTERS) {
+      return;
+    }
+    if (Math.random() >= VILLAGER_CHILD_RATE * dt) return;
+    const parent = adults[Math.floor(Math.random() * adults.length)];
+    const closest = adults
+      .filter((c) => c !== parent)
+      .sort(
+        (a, b) =>
+          (parent.mind.relationships[b.name] || 0) - (parent.mind.relationships[a.name] || 0) ||
+          this.world.distance(parent.col, parent.row, a.col, a.row) -
+            this.world.distance(parent.col, parent.row, b.col, b.row),
+      )[0];
+    if (!closest) return;
+    const child = this.spawnAt('villager', parent.col, parent.row, {
+      baby: true,
+      job: Math.random() < 0.7 ? parent.job : closest.job,
+      trait: Math.random() < 0.5 ? parent.trait : closest.trait,
+      mind: { memories: [`family: ${parent.name}, ${closest.name}`] },
+    });
+    if (!child) return;
+    this.setRelation(child, parent, 45);
+    this.setRelation(child, closest, 45);
+    this.strengthenRelation(parent, closest, 3);
+    if (this.onEvent) this.onEvent(t('event.villagerBorn', { name: child.name }));
   }
 
   // ---- あいさつ ----
@@ -827,7 +905,11 @@ export class CharacterManager {
         const key = [a.name + a.type, b.name + b.type].sort().join('|');
         const last = this.pairCooldowns.get(key) ?? -Infinity;
         if (time - last < GREET_COOLDOWN) continue;
-        if (Math.random() < 0.5) continue; // 毎回はしない
+        const friendship =
+          this.mindFeaturesActive() && a.type === 'villager' && b.type === 'villager'
+            ? Math.max(a.mind.relationships[b.name] || 0, b.mind.relationships[a.name] || 0)
+            : 0;
+        if (Math.random() < Math.max(0.18, 0.5 - friendship / 250)) continue;
         this.pairCooldowns.set(key, time);
         this.startGreeting(a, b);
         return; // 1スキャンで1組だけ
@@ -836,6 +918,7 @@ export class CharacterManager {
   }
 
   startGreeting(a: Character, b: Character) {
+    if (this.mindFeaturesActive()) this.strengthenRelation(a, b, 2);
     for (const [me, other] of [
       [a, b],
       [b, a],
@@ -848,6 +931,30 @@ export class CharacterManager {
     }
     this.addBubble(a, GREET_EMOJI[a.type as keyof typeof GREET_EMOJI]);
     if (Math.random() < 0.6) this.addBubble(b, GREET_EMOJI[b.type as keyof typeof GREET_EMOJI]);
+  }
+
+  private setRelation(a: Character, b: Character, value: number) {
+    if (a.type !== 'villager' || b.type !== 'villager' || a === b) return;
+    const score = Math.max(0, Math.min(100, Math.round(value)));
+    if (a.mind.relationships[b.name] === score && b.mind.relationships[a.name] === score) return;
+    a.mind.relationships[b.name] = score;
+    b.mind.relationships[a.name] = score;
+    this.onChanged?.();
+  }
+
+  private strengthenRelation(a: Character, b: Character, amount: number) {
+    if (a.type !== 'villager' || b.type !== 'villager' || a === b) return;
+    const current = Math.max(a.mind.relationships[b.name] || 0, b.mind.relationships[a.name] || 0);
+    this.setRelation(a, b, current + amount);
+  }
+
+  private mindFeaturesActive() {
+    return (
+      this.agentMindActive &&
+      this.settings.aiEnabled &&
+      this.settings.aiConsent &&
+      this.settings.aiAgentEnabled
+    );
   }
 
   addBubble(char: Character, emoji: string) {
@@ -876,7 +983,9 @@ export class CharacterManager {
 
   // つぶやかせる相手: いま手すきの村人を1人(いなければ null)
   randomIdleVillager() {
-    const idle = this.characters.filter((c) => c.type === 'villager' && c.state === 'idle');
+    const idle = this.characters.filter(
+      (c) => c.type === 'villager' && !c.baby && !c.agentReserved && c.state === 'idle',
+    );
     return idle.length ? idle[Math.floor(Math.random() * idle.length)] : null;
   }
 
@@ -905,11 +1014,24 @@ export class CharacterManager {
       if (c.type !== 'villager') continue;
       if (c.taskDone) {
         this.applyTaskEffect(c);
+        if (this.mindFeaturesActive()) {
+          for (const peer of this.characters) {
+            if (
+              peer !== c &&
+              peer.type === 'villager' &&
+              peer.job === c.job &&
+              this.world.distance(c.col, c.row, peer.col, peer.row) <= 3
+            ) {
+              this.strengthenRelation(c, peer, 1);
+            }
+          }
+        }
         c.taskDone = false;
         c.task = null;
       }
       c.jobCooldown -= dt;
       if (
+        !c.baby &&
         !isNight &&
         !this.festivalActive &&
         !c.agentReserved &&
@@ -1014,6 +1136,9 @@ export class CharacterManager {
           trait: { key: c.trait.key },
           col: c.col,
           row: c.row,
+          goal: c.mind.goal,
+          memories: [...c.mind.memories],
+          relationships: { ...c.mind.relationships },
         },
       };
     }
@@ -1032,6 +1157,7 @@ export class CharacterManager {
     if (this.planTask(c, 'lumberjack')) actions.unshift('work_lumberjack');
     if (this.planTask(c, 'farmer')) actions.unshift('work_farmer');
     if (this.planTask(c, 'fisher')) actions.unshift('work_fisher');
+    if (this.canRequestDevelopment?.('build_home')) actions.unshift('build_home');
     return actions;
   }
 
@@ -1051,6 +1177,7 @@ export class CharacterManager {
             this.world.isWalkable(c, r) &&
             this.world.neighbors(c, r).some(([nc, nr]) => this.world.topType(nc, nr) === 'water'),
         ).length,
+        homes: this.world.hutCenters().length,
       },
     };
   }
@@ -1063,21 +1190,41 @@ export class CharacterManager {
       trait: { key: c.trait.key },
       col: c.col,
       row: c.row,
+      goal: c.mind.goal,
+      memories: [...c.mind.memories],
+      relationships: { ...c.mind.relationships },
     }));
   }
 
-  applyAgentAction(name: string, action: AgentActionKey): boolean {
+  applyAgentAction(
+    name: string,
+    action: AgentActionKey,
+    intent: { goal?: unknown; memory?: unknown; say?: unknown } = {},
+  ): boolean {
     const c = this.agentCharacter(name);
     if (!c || !c.agentReserved || !this.canUseAgent(c)) return false;
     if (!this.agentActionKeys(name).includes(action)) return false;
+    let applied = false;
     if (action === 'take_it_easy') {
       c.jobCooldown = 120;
-      return true;
+      applied = true;
+    } else if (action === 'build_home') {
+      const target = this.onDevelopmentRequest?.('build_home');
+      if (target) {
+        c.task = { kind: 'build', target };
+        applied = true;
+      }
+    } else {
+      const job = action.replace('work_', '') as VillagerJob;
+      if (c.job !== job) this.changeJob(c, job);
+      c.task = this.planTask(c, job);
+      applied = Boolean(c.task);
     }
-    const job = action.replace('work_', '') as VillagerJob;
-    if (c.job !== job) this.changeJob(c, job);
-    c.task = this.planTask(c, job);
-    return Boolean(c.task);
+    if (!applied) return false;
+    if (updateMind(c.mind, intent)) this.onChanged?.();
+    const speech = cleanSpeech(intent.say);
+    if (speech) this.speak(c, speech);
+    return true;
   }
 
   private changeJob(c: Character, job: VillagerJob) {
@@ -1161,6 +1308,10 @@ export class CharacterManager {
         this.onEvent(t('event.jobFish', { name: c.name }));
       }
       c.jobCooldown = 70 + Math.random() * 80;
+      return;
+    }
+    if (task.kind === 'build') {
+      c.jobCooldown = 90 + Math.random() * 60;
     }
   }
 
@@ -1179,6 +1330,15 @@ export class CharacterManager {
     }
   }
 
+  rememberEvent(text: string) {
+    if (!this.mindFeaturesActive()) return;
+    let changed = false;
+    for (const c of this.characters) {
+      if (c.type === 'villager') changed = addMemory(c.mind, text) || changed;
+    }
+    if (changed) this.onChanged?.();
+  }
+
   // 設定パネルの「なかま」一覧
   roster() {
     const emoji = {
@@ -1195,11 +1355,21 @@ export class CharacterManager {
       if (c.variant === 'black') tags.push(t('tag.black'));
       if (c.job) tags.push(t(`job.${c.job}`));
       tags.push(t(`trait.${c.trait.key}`));
-      return t('roster.line', {
+      let line = t('roster.line', {
         emoji: emoji[c.type as keyof typeof emoji] || '❓',
         name: c.name,
         tags: tags.join(t('roster.sep')),
       });
+      if (c.type === 'villager' && c.mind.goal) {
+        line += t('roster.goal', { goal: c.mind.goal });
+      }
+      if (c.type === 'villager') {
+        const friend = Object.entries(c.mind.relationships).sort((a, b) => b[1] - a[1])[0];
+        if (friend && friend[1] >= 10) {
+          line += t('roster.friend', { name: friend[0] });
+        }
+      }
+      return line;
     });
   }
 
@@ -1217,6 +1387,7 @@ export class CharacterManager {
         job: c.job,
         trait: c.trait.key,
         variant: c.variant,
+        mind: c.mind,
       }));
   }
 
@@ -1233,7 +1404,17 @@ export class CharacterManager {
           job,
           trait: TRAITS.find((tr) => tr.key === traitKey),
           variant: item.variant || null,
+          mind: item.mind,
         });
+      }
+    }
+    const residentNames = new Set(
+      this.characters.filter((c) => c.type === 'villager').map((c) => c.name),
+    );
+    for (const c of this.characters) {
+      if (c.type !== 'villager') continue;
+      for (const name of Object.keys(c.mind.relationships)) {
+        if (!residentNames.has(name) || name === c.name) delete c.mind.relationships[name];
       }
     }
   }

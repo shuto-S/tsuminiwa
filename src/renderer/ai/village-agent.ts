@@ -14,6 +14,7 @@ interface AgentContext {
   season(): string;
   timeOfDay(): string;
   recentEvents(): string[];
+  language(): string;
 }
 
 interface VillageAgentOptions {
@@ -67,7 +68,11 @@ export class VillageAgent {
   }
 
   update(dt: number) {
-    if (!this.ai.settings.aiAgentEnabled || !this.ai.available() || this.busy) return;
+    if (!this.ai.settings.aiAgentEnabled || !this.ai.available()) {
+      this.characters.agentMindActive = false;
+      return;
+    }
+    if (this.busy) return;
     this.timer -= dt;
     if (this.timer > 0) return;
     this.timer = this.nextInterval();
@@ -94,6 +99,7 @@ export class VillageAgent {
       !this.ai.available() ||
       !this.underDailyLimit()
     ) {
+      if (!this.busy) this.characters.agentMindActive = false;
       return false;
     }
     const reserved = this.characters.reserveAgentCandidate(this.cursor);
@@ -129,6 +135,12 @@ export class VillageAgent {
         name: observed.self.name,
         job: observed.self.job,
         trait: observed.self.trait,
+        goal: candidate.goal || null,
+        memories: candidate.memories,
+        relationships: Object.entries(candidate.relationships)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 5)
+          .map(([name, closeness]) => ({ name, closeness })),
       },
       village: this.characters.agentSummary(),
       surroundings: { blocks: nearbyBlocks, walkableNearby, others: observed.others },
@@ -136,20 +148,29 @@ export class VillageAgent {
       season: observed.season,
       timeOfDay: observed.timeOfDay,
       recentEvents: observed.recentEvents,
+      responseLanguage: this.context.language(),
     });
 
     this.busy = true;
     this.countToday++;
     try {
       const choice = await this.ai.chooseAction({
-        system:
-          'You choose one gentle, useful activity for a villager in a cozy simulation. Call exactly one available function. Never invent coordinates or actions.',
+        system: `You choose one gentle, useful activity for a villager in a cozy simulation. Write goal, memory, and say in ${this.context.language() === 'ja' ? 'Japanese' : 'English'}. Call exactly one available function. Fill goal with a short stable first-person purpose, memory with one factual takeaway or an empty string, and say with one brief in-character line or an empty string. Respect existing memories and close relationships. Help balance village jobs and react gently to recent events. Never invent coordinates, people, events, or actions.`,
         prompt,
         tools,
         maxOutputTokens: 128,
       });
-      if (generation !== this.generation || !choice) return false;
-      return this.characters.applyAgentAction(candidate.name, choice.name as AgentActionKey);
+      if (generation !== this.generation || !choice) {
+        this.characters.agentMindActive = false;
+        return false;
+      }
+      const applied = this.characters.applyAgentAction(
+        candidate.name,
+        choice.name as AgentActionKey,
+        choice.arguments,
+      );
+      this.characters.agentMindActive = applied;
+      return applied;
     } finally {
       this.characters.releaseAgentCandidate(candidate.name);
       this.busy = false;

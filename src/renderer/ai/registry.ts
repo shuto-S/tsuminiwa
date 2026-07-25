@@ -3,6 +3,7 @@
 // 新要素は「説明を1行足す or 登録するだけ」で AI 側が自動対応できる。
 import { BLOCK_TYPES } from '../config.ts';
 import { t } from '../i18n/index.ts';
+import { AGENT_INTENT_PARAMS } from './mind.ts';
 
 interface EventDef {
   subject: string;
@@ -72,7 +73,7 @@ export function getAction(key: string): ActionDef | null {
 export function listActions() {
   return [...actions.values()];
 }
-// Gemini function calling 用のツール宣言に変換
+// 各プロバイダの function/tool calling 用のツール宣言に変換
 export function actionFunctionDeclarations() {
   return listActions().map((a) => ({
     name: a.key,
@@ -105,12 +106,17 @@ for (const def of [
     description: 'Choose fisher work: go to a safe bank and fish.',
   },
   {
+    key: 'build_home',
+    description:
+      'Help the village grow by building a new home when there is a safe prepared building site.',
+  },
+  {
     key: 'take_it_easy',
     description: 'Take it easy for now and continue ordinary village wandering.',
   },
 ]) {
   registerAction({
     ...def,
-    params: { type: 'object', properties: {}, required: [], additionalProperties: false },
+    params: AGENT_INTENT_PARAMS,
   });
 }

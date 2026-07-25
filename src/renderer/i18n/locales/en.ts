@@ -159,6 +159,8 @@ export const en = {
   // ---- roster ----
   'roster.empty': 'No one here yet',
   'roster.line': '{emoji} {name} ({tags})',
+  'roster.goal': ' — 🎯 {goal}',
+  'roster.friend': ' 💛 {name}',
   'roster.sep': ', ',
   'tag.baby': 'baby',
   'tag.black': 'black',
@@ -180,6 +182,7 @@ export const en = {
   'event.hatch': '🐣 The chick "{name}" hatched',
   'event.lambBlack': '🐑 A rare black lamb, "{name}", was born!',
   'event.lamb': '🐑 A lamb "{name}" was born',
+  'event.villagerBorn': '👶 {name} was born in the village',
   'event.festivalAnimals': '🎉 A festival by the campfire — even the animals join in!',
   'event.festival': '🎉 A festival has begun around the campfire!',
 

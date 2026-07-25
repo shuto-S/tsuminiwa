@@ -74,6 +74,8 @@ src/renderer/
   i18n/locales/ja.ts       日本語辞書(基準)。en.ts は英語。LOCALES に足せば言語追加
   ai/client.ts             レンダラー側 AI クライアント(オプトイン判定・レート上限・
                            プール・失敗時 null)。フレーバー機能はここだけ使う
+  ai/mind.ts               村人の短い目的・記憶・関係性の正規化とAI応答スキーマ
+  ai/village-agent.ts      村の観測と個人の記憶から登録アクションを選ぶ低頻度エージェント
   ai/flavor.ts             プロンプト生成の純ロジック(mutter/poem/tale/chronicle/names/worldgen)
                            + cleanLine/parseNameList/parseParams。テスト test/ai-flavor.test.mjs
   ai/generate.ts           生成オーケストレーション(prompt→generate→整形)。main はこれを呼ぶだけ
@@ -211,8 +213,12 @@ src/renderer/
   新イベントは registerEvent、新アクションは registerAction すれば、フレーバー(一句)/世界生成/
   エージェント(#4)が**追加コードなしで**対応する。イベント種を flavor に直書きしないこと。
   村人エージェントは実行可能な登録アクションだけを各社の function/tool calling に渡し、
-  observeWorld() の観測から1人ずつしごとを選ぶ。3〜5分間隔・1日60回まで・同時1件で、
-  夜/祭り/失敗/世界再生成時は従来の決定ロジックへ戻す。
+  observeWorld() の観測、本人の短い目的・記憶・関係性から1人ずつしごとや発展を選ぶ。
+  目的・記憶はセーブされ、あいさつ・共同作業・祭りで関係が育ち、親の trait/job は
+  子どもへ確率的に継承される。3〜5分間隔・1日60回まで・同時1件で、
+  夜/祭り/失敗/世界再生成時は従来の決定ロジックへ戻す。関係更新と継承はAI判断が
+  成功している間だけ有効にし、無効・未同意・キーなし・失敗時は従来挙動を保つ。小屋の発展アクションは
+  自動発展が有効なときだけ、既存の安全な建設キューを通して実行する。
 
 ### 設定の追加手順
 新しい設定(DEFAULT_SETTINGS のキー)を足すときは4か所:
@@ -223,7 +229,8 @@ src/renderer/
 (各システムが settings オブジェクトへの参照を持っているので、値の読み取りだけなら 4 は不要)
 
 ### セーブ
-- world + characters + auto フラグ + settings + dayTime + day + waterDist + eventLog を JSON で
+- world + characters(目的・記憶・関係性を含む) + auto フラグ + settings + dayTime + day +
+  waterDist + eventLog を JSON で
   `~/Library/Application Support/tsuminiwa/world.json` に保存(開発版とアプリ版で共有)。
 - **保存されないもの**(再起動でリセット): 旅人、にわとりの卵、aging の年齢、
   水たまり、虹、天気の状態。

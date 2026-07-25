@@ -188,13 +188,20 @@ export class Autopilot {
   }
 
   // ひとがいるときだけ、六角リングの小屋を少しずつ建てる
-  buildHut(): void {
+  canBuildHut(): boolean {
+    if (!this.enabled || this.queue.length > 0) return false;
     const hasVillager = this.characters.characters.some((c: any) => c.type === 'villager');
-    if (!hasVillager) return;
+    if (!hasVillager) return false;
 
     // 建った小屋の数で数える。崩れかけの残骸レンガを数えて建設が
     // 止まらないよう、生きている屋根の中心だけをカウントする
-    if (this.world.hutCenters().length >= 3) return;
+    if (this.world.hutCenters().length >= 3) return false;
+    return this.grassTops().some(([c, r]) => Boolean(this.hutPlan(c, r)));
+  }
+
+  buildHut(): Coord | null {
+    const hasVillager = this.characters.characters.some((c: any) => c.type === 'villager');
+    if (!hasVillager || this.world.hutCenters().length >= 3 || this.queue.length > 0) return null;
 
     const spots = shuffle(this.grassTops());
     for (const [c, r] of spots) {
@@ -202,9 +209,14 @@ export class Autopilot {
       if (site) {
         this.queue.push(...site);
         this.queueLabel = t('event.autopilotHut');
-        return;
+        return [c, r];
       }
     }
+    return null;
+  }
+
+  requestBuildHut(): Coord | null {
+    return this.enabled ? this.buildHut() : null;
   }
 
   hutPlan(col: number, row: number): BlockPlacement[] | null {

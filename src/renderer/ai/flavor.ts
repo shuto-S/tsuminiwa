@@ -11,6 +11,8 @@ export interface MutterCtx {
   name: string;
   job?: string | null;
   trait?: string | null;
+  goal?: string | null;
+  memories?: string[];
 }
 
 export interface PoemCtx {
@@ -72,6 +74,8 @@ export function mutterRequest(ctx: MutterCtx) {
   ];
   if (ctx.job) parts.push(`Job: ${ctx.job}`);
   if (ctx.trait) parts.push(`Personality: ${ctx.trait}`);
+  if (ctx.goal) parts.push(`Current goal: ${ctx.goal}`);
+  if (ctx.memories?.length) parts.push(`Recent memories: ${ctx.memories.slice(-2).join(' / ')}`);
   const prompt = `${parts.join(', ')}. What does this villager mutter to themselves right now?`;
   return { system, prompt, maxOutputTokens: 40 };
 }

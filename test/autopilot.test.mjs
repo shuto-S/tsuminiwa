@@ -49,3 +49,17 @@ test('autopilot: 建設キューがあるときは1ブロックずつ積む', ()
   assert.equal(world.stackAt(3, 3)[1], 'wood');
   assert.equal(auto.queue.length, 1, '1つだけ処理される');
 });
+
+test('autopilot: AIの発展要求は有効時だけ安全な小屋計画へ変換する', () => {
+  const world = grassWorld();
+  const auto = new Autopilot(world, { characters: [{ type: 'villager' }] }, { autoSpeed: 1 });
+  assert.equal(auto.canBuildHut(), false);
+  assert.equal(auto.requestBuildHut(), null);
+
+  auto.enabled = true;
+  assert.equal(auto.canBuildHut(), true);
+  const target = auto.requestBuildHut();
+  assert.ok(Array.isArray(target));
+  assert.ok(auto.queue.length > 0);
+  assert.equal(auto.canBuildHut(), false, '建設中は二重要求を受けない');
+});

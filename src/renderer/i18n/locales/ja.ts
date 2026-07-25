@@ -158,6 +158,8 @@ export const ja = {
   // ---- なかま一覧 ----
   'roster.empty': 'まだ だれもいない',
   'roster.line': '{emoji} {name}({tags})',
+  'roster.goal': ' — 🎯 {goal}',
+  'roster.friend': ' 💛 {name}',
   'roster.sep': '・',
   'tag.baby': 'こども',
   'tag.black': 'くろ',
@@ -179,6 +181,7 @@ export const ja = {
   'event.hatch': '🐣 ひよこの「{name}」が かえった',
   'event.lambBlack': '🐑 めずらしい くろい こひつじ、「{name}」が うまれた!',
   'event.lamb': '🐑 こひつじの「{name}」が うまれた',
+  'event.villagerBorn': '👶 むらに「{name}」が うまれた',
   'event.festivalAnimals': '🎉 たきびのまわりで どうぶつもいっしょに おまつり!',
   'event.festival': '🎉 たきびのまわりで おまつりが はじまった!',
 

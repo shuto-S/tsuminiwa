@@ -38,6 +38,16 @@ test('生成失敗(ok:false)は null にフォールバック', async () => {
   assert.equal(await c.generate({ prompt: 'x' }), null);
 });
 
+test('backend が例外を投げても null にフォールバック', async () => {
+  const backend = makeBackend({
+    generate: () => {
+      throw new Error('network disconnected');
+    },
+  });
+  const c = new AiClient(enabled, backend);
+  await assert.doesNotReject(async () => assert.equal(await c.generate({ prompt: 'x' }), null));
+});
+
 test('成功時はテキストを返す', async () => {
   const backend = makeBackend({ generate: () => ({ ok: true, text: '  やあ  ' }) });
   const c = new AiClient(enabled, backend);

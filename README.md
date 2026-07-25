@@ -107,12 +107,14 @@ macOS (Apple Silicon) + Node.js 24+ が必要です(テストが `.ts` を Node 
 - **開発の進め方・不変条件・貢献手順**: [CONTRIBUTING.md](CONTRIBUTING.md)
 - 手順(セットアップ・リリース・トラブルシューティング): [DEVELOPMENT.md](DEVELOPMENT.md)
 - コード構造と設計(AIエージェント向け): [AGENTS.md](AGENTS.md)
-- 進行中の作業: [Issues](https://github.com/shuto-S/tsuminiwa/issues)(オープンは村人のAIエージェント化)
+- 進行中の作業: [Issues](https://github.com/shuto-S/tsuminiwa/issues)
 
 構成の要点: Electron + Three.js(OrthographicCamera のアイソメ視点、InstancedMesh)、
 odd-r オフセット座標の六角グリッド、esbuild バンドル。環境音は Web Audio でリアルタイム生成。
 AI(Gemini / OpenAI / Anthropic)は完全オプトイン。フレーバー生成に加えて、
-任意で村人のしごと選びにも使え、無効・未設定・通信失敗時は従来動作へ戻ります。
+任意で村人のしごと選び・短い目的と記憶・ことば・村の発展にも使えます。
+あいさつや共同作業で関係が育ち、子どもには親の傾向が引き継がれます。
+無効・未設定・通信失敗時は従来動作へ戻ります。
 
 ## ライセンス
 

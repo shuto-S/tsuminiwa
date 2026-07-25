@@ -18,6 +18,9 @@ function makeCharacters() {
     trait: { key: 'relaxed' },
     col: 2,
     row: 2,
+    goal: '',
+    memories: [],
+    relationships: {},
   };
   const manager = {
     applied: [],
@@ -30,8 +33,8 @@ function makeCharacters() {
       resources: { trees: 6, farms: 1, ripeCrops: 0, fishingSpots: 2 },
     }),
     agentCharacters: () => [candidate],
-    applyAgentAction: (name, action) => {
-      manager.applied.push([name, action]);
+    applyAgentAction: (name, action, intent) => {
+      manager.applied.push([name, action, intent]);
       return true;
     },
   };
@@ -51,6 +54,7 @@ const context = {
   season: () => 'spring',
   timeOfDay: () => 'day',
   recentEvents: () => [],
+  language: () => 'ja',
 };
 
 test('実行可能なアクションだけを渡して、選択結果を既存タスク側へ適用する', async () => {
@@ -61,7 +65,13 @@ test('実行可能なアクションだけを渡して、選択結果を既存�
       hasKey: async () => true,
       generate: async (opts) => {
         calls.push(opts);
-        return { ok: true, toolCall: { name: 'work_farmer', arguments: {} } };
+        return {
+          ok: true,
+          toolCall: {
+            name: 'work_farmer',
+            arguments: { goal: 'grow food', memory: 'spring field', say: '畑へいこう' },
+          },
+        };
       },
     },
     { limits: { maxPerDay: 200, minIntervalMs: 0 } },
@@ -73,7 +83,9 @@ test('実行可能なアクションだけを渡して、選択結果を既存�
   });
 
   assert.equal(await agent.runOnce(), true);
-  assert.deepEqual(characters.applied, [['ゆず', 'work_farmer']]);
+  assert.deepEqual(characters.applied, [
+    ['ゆず', 'work_farmer', { goal: 'grow food', memory: 'spring field', say: '畑へいこう' }],
+  ]);
   assert.deepEqual(
     calls[0].output.tools.map((tool) => tool.name),
     ['work_farmer', 'take_it_easy'],
@@ -81,6 +93,8 @@ test('実行可能なアクションだけを渡して、選択結果を既存�
   const sent = JSON.parse(calls[0].prompt);
   assert.equal(sent.villager.name, 'ゆず');
   assert.equal('col' in sent.villager, false, '座標はモデルへ渡さない');
+  assert.equal(calls[0].output.tools[0].parameters.required.length, 3);
+  assert.equal(characters.agentMindActive, true);
   assert.deepEqual(characters.released, ['ゆず']);
 });
 
@@ -123,4 +137,5 @@ test('村人エージェント独自の日次上限を超えない', async () =>
   assert.equal(await agent.runOnce(), true);
   assert.equal(await agent.runOnce(), false);
   assert.equal(characters.applied.length, 1);
+  assert.equal(characters.agentMindActive, false);
 });
