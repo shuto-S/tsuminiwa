@@ -1,4 +1,6 @@
-import type { AiAuthMode } from '../shared/ipc.ts';
+import type { AiAuthMode, AiProvider } from '../shared/ipc.ts';
+import { AI_PROVIDERS, defaultAiModels } from '../shared/ai-config.ts';
+export { AI_MODELS, AI_PROVIDERS } from '../shared/ai-config.ts';
 
 // アプリ内言語
 export type Language = 'ja' | 'en';
@@ -99,9 +101,11 @@ export interface Settings {
   dayNight: boolean;
   dayLength: number;
   aiEnabled: boolean;
+  aiProvider: AiProvider;
   aiAuthMode: AiAuthMode;
-  aiModel: string;
+  aiModels: Record<AiProvider, string>;
   aiConsent: boolean;
+  aiAgentEnabled: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -121,12 +125,43 @@ export const DEFAULT_SETTINGS: Settings = {
   weatherInterval: 60, // 天気が変わる間隔(秒)
   dayNight: true, // 昼夜サイクル
   dayLength: 360, // 1日の長さ(秒)
-  // ---- AI(Gemini)。既定オフ・完全オプトイン。キーは safeStorage に別保存 ----
+  // ---- AI。既定オフ・完全オプトイン。キーは Main が環境変数からだけ読む ----
   aiEnabled: false, // AI フレーバー生成を使う
+  aiProvider: 'gemini',
   aiAuthMode: 'developer', // 'developer'(AI Studio) / 'vertex-express'(Vertex Express)
-  aiModel: 'gemini-2.5-flash', // 生成モデル
+  aiModels: defaultAiModels(),
   aiConsent: false, // 世界の状態を外部APIに送ることへの同意
+  aiAgentEnabled: false, // 村人のしごと選びにも AI を使う
 };
 
-// AI で選べるモデル(表示は設定の select に並ぶ)
-export const AI_MODELS = ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash'];
+// 旧セーブの aiModel は Gemini の選択値として引き継ぐ。
+export function settingsFromSave(saved: unknown): Settings {
+  const source = saved && typeof saved === 'object' ? (saved as Record<string, unknown>) : {};
+  const savedModels =
+    source.aiModels && typeof source.aiModels === 'object'
+      ? (source.aiModels as Partial<Record<AiProvider, unknown>>)
+      : {};
+  const legacyGemini = typeof source.aiModel === 'string' ? source.aiModel : undefined;
+  const migrated = { ...source };
+  delete migrated.aiModel;
+  delete migrated.aiModels;
+  return {
+    ...DEFAULT_SETTINGS,
+    ...migrated,
+    aiProvider: AI_PROVIDERS.includes(source.aiProvider as AiProvider)
+      ? (source.aiProvider as AiProvider)
+      : DEFAULT_SETTINGS.aiProvider,
+    aiModels: {
+      gemini:
+        (typeof savedModels.gemini === 'string' && savedModels.gemini) ||
+        legacyGemini ||
+        DEFAULT_SETTINGS.aiModels.gemini,
+      openai:
+        (typeof savedModels.openai === 'string' && savedModels.openai) ||
+        DEFAULT_SETTINGS.aiModels.openai,
+      anthropic:
+        (typeof savedModels.anthropic === 'string' && savedModels.anthropic) ||
+        DEFAULT_SETTINGS.aiModels.anthropic,
+    },
+  };
+}

@@ -111,7 +111,8 @@ macOS (Apple Silicon) + Node.js 24+ が必要です(テストが `.ts` を Node 
 
 構成の要点: Electron + Three.js(OrthographicCamera のアイソメ視点、InstancedMesh)、
 odd-r オフセット座標の六角グリッド、esbuild バンドル。環境音は Web Audio でリアルタイム生成。
-AI(Gemini)はオプトインのフレーバー層で、無効時は完全に従来動作。
+AI(Gemini / OpenAI / Anthropic)は完全オプトイン。フレーバー生成に加えて、
+任意で村人のしごと選びにも使え、無効・未設定・通信失敗時は従来動作へ戻ります。
 
 ## ライセンス
 

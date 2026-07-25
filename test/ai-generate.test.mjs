@@ -86,8 +86,8 @@ test('generateChronicle: できごとを渡すと要約が返り、プロンプ�
   assert.match(backend.calls[0].prompt, /Day 3/);
 });
 
-test('refillNamePool: JSON配列応答をプールに積む', async () => {
-  const backend = mockBackend('["そら","うみ","はな"]');
+test('refillNamePool: JSON応答をプールに積む', async () => {
+  const backend = mockBackend('{"names":["そら","うみ","はな"]}');
   const c = new AiClient(enabled, backend, noLimit);
   const names = await refillNamePool(c, 'villager', { season: 'spring', lang: 'ja' });
   assert.deepEqual(names, ['そら', 'うみ', 'はな']);

@@ -127,10 +127,15 @@ export function namesRequest(type: string, ctx: NamesCtx) {
   const script = ctx.lang === 'en' ? 'short romanized names' : 'short cute Japanese names (kana)';
   const system =
     `You name characters for a cozy garden game. ` +
-    `Output ONLY a JSON array of 6 ${script} for ${kindWord}, each 1 short word, gentle and varied. ` +
+    `Output ONLY a JSON object with a "names" array of 6 ${script} for ${kindWord}, each 1 short word, gentle and varied. ` +
     `No duplicates, no explanation.`;
   const prompt = `Season: ${ctx.season}. Give 6 names.`;
-  const schema = { type: 'array', items: { type: 'string' } };
+  const schema = {
+    type: 'object',
+    properties: { names: { type: 'array', items: { type: 'string' } } },
+    required: ['names'],
+    additionalProperties: false,
+  };
   return { system, prompt, schema, maxOutputTokens: 120 };
 }
 
@@ -167,8 +172,9 @@ export function parseNameList(text: string | null | undefined): string[] {
   if (!text) return [];
   try {
     const v = JSON.parse(text);
-    return Array.isArray(v)
-      ? v.filter((s) => typeof s === 'string' && s.trim()).map((s) => s.trim())
+    const names = Array.isArray(v) ? v : v?.names;
+    return Array.isArray(names)
+      ? names.filter((s) => typeof s === 'string' && s.trim()).map((s) => s.trim())
       : [];
   } catch {
     return [];

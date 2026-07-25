@@ -42,7 +42,7 @@ src/main/                  メインプロセス(Node)。esbuild で dist/*.js �
                            world.json の読み書き・スクショ保存(ピクチャ/つみにわ)・
                            Xシェア(クリップボード+web intent)・自動起動の IPC
   preload.ts               contextBridge で window.tsuminiwa を公開(loadWorld/saveWorld/quit/setPinned)
-  ai-service.ts            Gemini 連携。@google/genai を遅延 require、キーは safeStorage 暗号化保存
+  ai-service.ts            Gemini / OpenAI / Anthropic 連携。キーは環境変数からのみ参照
 src/shared/                メイン・レンダラー両方が使う型
   ipc.ts                   IPC 境界(window.tsuminiwa)の型定義
 src/renderer/
@@ -187,14 +187,15 @@ src/renderer/
 - キャラ名は言語ごとの名前プール(namesFor)から採るが、付いた名前は固有名として保存され、
   言語を変えても変わらない(混在は仕様)。初回起動のみ OS 言語で既定を決める。
 
-### AI(Gemini)基盤
+### AI基盤
 - **完全オプトイン**。既定オフ・キー未設定・未同意・オフライン・失敗時は必ず従来動作に
-  フォールバックする(AI は上乗せ)。プロバイダは Gemini、SDK は `@google/genai`。
-  認証は「キーを貼る」2方式のみ: `developer`(AI Studio)/ `vertex-express`(Vertex Express)。
-  フル Vertex(ADC)はやらない。
+  フォールバックする(AI は上乗せ)。プロバイダは Gemini / OpenAI / Anthropic。
+  SDK は `@google/genai` / `openai` / `@anthropic-ai/sdk`。プロバイダ間の自動切替はしない。
+  Gemini のみ `developer`(AI Studio) / `vertex-express`(Vertex Express)を選べる。
 - **メインプロセス集約**: SDK と API キーは `src/main/ai-service.ts` に置く。
   レンダラーは CSP のため外部 API を叩けず、`window.tsuminiwa.ai`(preload)→ IPC 経由。
-  キーは safeStorage で暗号化保存(world.json には入れない)。
+  キーは `GEMINI_API_KEY` / `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` からのみ読む。
+  開発時だけルート `.env` を読み、パッケージ版では起動プロセスの環境変数だけを使う。
 - **レンダラーからは `ai/client.ts` の AiClient だけを使う**。available()/underRate() の
   ガードと take/fill のプールを通し、生成不可・失敗時は null を返す(呼び出し側でフォールバック)。
 - 生成は現在の言語で(プロンプトに言語を渡す)。モデルは設定で選択(AI_MODELS)。
@@ -209,8 +210,9 @@ src/renderer/
 - **自己記述層(#5)= ai/registry.ts が単一の真実の source**。新ブロックは BLOCK_DESC に1行、
   新イベントは registerEvent、新アクションは registerAction すれば、フレーバー(一句)/世界生成/
   エージェント(#4)が**追加コードなしで**対応する。イベント種を flavor に直書きしないこと。
-  #4 のエージェントは actionFunctionDeclarations() を Gemini の function calling に渡し、
-  observeWorld() で観測を渡す設計(ai-service.generate は tools 引数を受ける)。
+  村人エージェントは実行可能な登録アクションだけを各社の function/tool calling に渡し、
+  observeWorld() の観測から1人ずつしごとを選ぶ。3〜5分間隔・1日60回まで・同時1件で、
+  夜/祭り/失敗/世界再生成時は従来の決定ロジックへ戻す。
 
 ### 設定の追加手順
 新しい設定(DEFAULT_SETTINGS のキー)を足すときは4か所:

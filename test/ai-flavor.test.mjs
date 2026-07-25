@@ -67,7 +67,8 @@ test('chronicleRequest: できごとを渡し要約を頼む', () => {
 
 test('namesRequest: schema付きで種類・言語を反映', () => {
   const r = namesRequest('sheep', { season: 'spring', lang: 'en' });
-  assert.equal(r.schema.type, 'array');
+  assert.equal(r.schema.type, 'object');
+  assert.equal(r.schema.properties.names.type, 'array');
   assert.match(r.system, /sheep/);
   assert.match(r.system, /romanized/);
   const ja = namesRequest('villager', { season: 'spring', lang: 'ja' });
@@ -76,6 +77,7 @@ test('namesRequest: schema付きで種類・言語を反映', () => {
 
 test('parseNameList: JSON配列を安全にパース', () => {
   assert.deepEqual(parseNameList('["a"," b ","",1,"c"]'), ['a', 'b', 'c']);
+  assert.deepEqual(parseNameList('{"names":["a","b"]}'), ['a', 'b']);
   assert.deepEqual(parseNameList('not json'), []);
   assert.deepEqual(parseNameList(null), []);
   assert.deepEqual(parseNameList('{"x":1}'), []);

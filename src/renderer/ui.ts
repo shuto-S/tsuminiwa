@@ -1,7 +1,7 @@
-import { BLOCK_TYPES, AI_MODELS } from './config.ts';
+import { BLOCK_TYPES, AI_MODELS, AI_PROVIDERS } from './config.ts';
 import type { Settings } from './config.ts';
 import { t, setLanguage, applyDomTranslations, LOCALES } from './i18n/index.ts';
-import type { AiAuthMode } from '../shared/ipc.ts';
+import type { AiAuthMode, AiProvider } from '../shared/ipc.ts';
 
 // window.tsuminiwa の型は global.d.ts で宣言済み。t() は i18n/index.ts で型付け済み。
 
@@ -448,18 +448,28 @@ function setupEventLog(callbacks: Callbacks) {
   });
 }
 
-// ---- AI(Gemini)設定の配線 ----
+// ---- AI設定の配線 ----
 function setupAiSettings(callbacks: Callbacks, state: State) {
   const s = state.settings;
   const aiConfig = document.getElementById('ai-config') as HTMLElement;
   const enabled = document.getElementById('opt-ai-enabled') as HTMLInputElement;
+  const providerSel = document.getElementById('opt-ai-provider') as HTMLSelectElement;
   const authSel = document.getElementById('opt-ai-auth') as HTMLSelectElement;
+  const authLabel = authSel.closest('label');
   const modelSel = document.getElementById('opt-ai-model') as HTMLSelectElement;
-  const keyInput = document.getElementById('ai-key-input') as HTMLInputElement;
+  const customModel = document.getElementById('opt-ai-custom-model') as HTMLInputElement;
+  const customModelLabel = customModel.closest('label');
   const keyStatus = document.getElementById('ai-key-status') as HTMLElement;
   const consent = document.getElementById('opt-ai-consent') as HTMLInputElement;
+  const agentEnabled = document.getElementById('opt-ai-agent-enabled') as HTMLInputElement;
 
-  // 認証方式・モデルの選択肢
+  for (const provider of AI_PROVIDERS) {
+    const option = document.createElement('option');
+    option.value = provider;
+    option.dataset.i18n = `settings.aiProvider.${provider}`;
+    option.textContent = t(option.dataset.i18n);
+    providerSel.appendChild(option);
+  }
   for (const [value, key] of [
     ['developer', 'settings.aiAuthDeveloper'],
     ['vertex-express', 'settings.aiAuthVertex'],
@@ -470,24 +480,35 @@ function setupAiSettings(callbacks: Callbacks, state: State) {
     o.textContent = t(key);
     authSel.appendChild(o);
   }
-  for (const m of AI_MODELS) {
-    const o = document.createElement('option');
-    o.value = o.textContent = m;
-    modelSel.appendChild(o);
-  }
 
-  const keyInputLabel = keyInput.closest('label');
-  const saveBtn = document.getElementById('ai-key-save') as HTMLElement;
-  const clearBtn = document.getElementById('ai-key-clear') as HTMLElement;
   const testBtn = document.getElementById('ai-test') as HTMLElement;
+  const selectedProvider = () => providerSel.value as AiProvider;
+  const renderModels = () => {
+    const provider = selectedProvider();
+    const current = s.aiModels[provider];
+    modelSel.replaceChildren();
+    for (const model of AI_MODELS[provider]) {
+      const option = document.createElement('option');
+      option.value = option.textContent = model;
+      modelSel.appendChild(option);
+    }
+    const custom = document.createElement('option');
+    custom.value = '__custom__';
+    custom.dataset.i18n = 'settings.aiModelCustom';
+    custom.textContent = t('settings.aiModelCustom');
+    modelSel.appendChild(custom);
+    const preset = AI_MODELS[provider].includes(current);
+    modelSel.value = preset ? current : '__custom__';
+    customModel.value = preset ? '' : current;
+    customModelLabel?.classList.toggle('hidden', preset);
+    authLabel?.classList.toggle('hidden', provider !== 'gemini');
+  };
+
   const refreshKeyStatus = async () => {
-    const has = await window.tsuminiwa.ai.hasKey();
-    keyStatus.textContent = t(has ? 'settings.aiKeySaved' : 'settings.aiKeyNone');
-    // 保存済みなら入力欄と保存ボタンを隠し、消去・接続テストを出す。
-    // 未保存なら入力欄と保存ボタンだけ出す(消去・接続テストは隠す)。
-    if (keyInputLabel) keyInputLabel.classList.toggle('hidden', has);
-    saveBtn.classList.toggle('hidden', has);
-    clearBtn.classList.toggle('hidden', !has);
+    const provider = selectedProvider();
+    const status = await window.tsuminiwa.ai.keyStatus();
+    const has = status[provider];
+    keyStatus.textContent = t(has ? 'settings.aiKeyFound' : 'settings.aiKeyNone');
     testBtn.classList.toggle('hidden', !has);
   };
 
@@ -495,9 +516,11 @@ function setupAiSettings(callbacks: Callbacks, state: State) {
 
   const sync = () => {
     enabled.checked = s.aiEnabled;
+    providerSel.value = s.aiProvider;
     authSel.value = s.aiAuthMode;
-    modelSel.value = s.aiModel;
     consent.checked = s.aiConsent;
+    agentEnabled.checked = s.aiAgentEnabled;
+    renderModels();
     syncVisibility();
     void refreshKeyStatus();
   };
@@ -507,28 +530,41 @@ function setupAiSettings(callbacks: Callbacks, state: State) {
     syncVisibility();
     callbacks.settingChanged('aiEnabled', enabled.checked);
   });
+  providerSel.addEventListener('change', () => {
+    callbacks.settingChanged('aiProvider', selectedProvider());
+    renderModels();
+    void refreshKeyStatus();
+  });
   authSel.addEventListener('change', () => callbacks.settingChanged('aiAuthMode', authSel.value));
-  modelSel.addEventListener('change', () => callbacks.settingChanged('aiModel', modelSel.value));
+  modelSel.addEventListener('change', () => {
+    const provider = selectedProvider();
+    const isCustom = modelSel.value === '__custom__';
+    customModelLabel?.classList.toggle('hidden', !isCustom);
+    if (!isCustom) {
+      s.aiModels[provider] = modelSel.value;
+      callbacks.settingChanged('aiModels', { ...s.aiModels });
+    } else {
+      customModel.focus();
+    }
+  });
+  customModel.addEventListener('change', () => {
+    const value = customModel.value.trim();
+    if (!value) return;
+    s.aiModels[selectedProvider()] = value;
+    callbacks.settingChanged('aiModels', { ...s.aiModels });
+  });
   consent.addEventListener('change', () => callbacks.settingChanged('aiConsent', consent.checked));
+  agentEnabled.addEventListener('change', () =>
+    callbacks.settingChanged('aiAgentEnabled', agentEnabled.checked),
+  );
 
-  document.getElementById('ai-key-save')!.addEventListener('click', async () => {
-    const key = keyInput.value.trim();
-    if (!key) return;
-    const ok = await window.tsuminiwa.ai.setKey(key);
-    keyInput.value = '';
-    showToast(t(ok ? 'ai.keySaved' : 'ai.keySaveFail'));
-    refreshKeyStatus();
-  });
-  document.getElementById('ai-key-clear')!.addEventListener('click', async () => {
-    await window.tsuminiwa.ai.clearKey();
-    showToast(t('ai.keyCleared'));
-    refreshKeyStatus();
-  });
   document.getElementById('ai-test')!.addEventListener('click', async () => {
-    if (!(await window.tsuminiwa.ai.hasKey())) return showToast(t('ai.needKey'));
+    const provider = selectedProvider();
+    if (!(await window.tsuminiwa.ai.hasKey(provider))) return showToast(t('ai.needKey'));
     const r = await window.tsuminiwa.ai.test({
+      provider,
       authMode: authSel.value as AiAuthMode,
-      model: modelSel.value,
+      model: s.aiModels[provider],
     });
     showToast(r.ok ? t('ai.testOk') : t('ai.testFail', { error: r.error || '' }));
   });

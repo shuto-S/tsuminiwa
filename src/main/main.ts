@@ -13,15 +13,25 @@ import {
 } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
-import { storeKey, clearKey, hasKey, testConnection, generate } from './ai-service.ts';
+import { keyStatus, hasKey, testConnection, generate } from './ai-service.ts';
 import { loadWorldFiles, saveWorldAtomic } from './storage.ts';
-import type { AiAuthMode, AiGenerateOptions } from '../shared/ipc.ts';
+import type { AiGenerateOptions, AiProvider } from '../shared/ipc.ts';
 
 const SHARE_TEXT =
   'デスクトップのすみで、ちいさな世界が育っています 🌱 #つみにわ\nhttps://github.com/shuto-S/tsuminiwa';
 
 const MARGIN = 16;
 const SMOKE_TEST = process.argv.includes('--smoke-test');
+// 開発時だけリポジトリ直下の .env を読む。配布アプリは起動プロセスの環境変数だけを使う。
+if (!app.isPackaged) {
+  try {
+    process.loadEnvFile(path.join(process.cwd(), '.env'));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+      console.warn('Could not load development .env:', error);
+    }
+  }
+}
 const smokeUserData = SMOKE_TEST
   ? fs.mkdtempSync(path.join(app.getPath('temp'), 'tsuminiwa-smoke-'))
   : null;
@@ -245,17 +255,19 @@ ipcMain.handle('world:save', async (_event: IpcMainInvokeEvent, json: string) =>
 
 ipcMain.on('app:quit', () => app.quit());
 
-// ---- AI(Gemini)。キーの保存・接続テスト・生成はすべてメインプロセスで ----
-ipcMain.handle('ai:setKey', (_event: IpcMainInvokeEvent, key: string) => storeKey(key));
-ipcMain.handle('ai:clearKey', () => {
-  clearKey();
-  return true;
-});
-ipcMain.handle('ai:hasKey', () => (SMOKE_TEST ? true : hasKey()));
+// ---- AI。キー参照・接続テスト・生成はすべてメインプロセスで ----
+ipcMain.handle('ai:keyStatus', () =>
+  SMOKE_TEST ? { gemini: true, openai: true, anthropic: true } : keyStatus(),
+);
+ipcMain.handle('ai:hasKey', (_event: IpcMainInvokeEvent, provider?: AiProvider) =>
+  SMOKE_TEST ? true : hasKey(provider),
+);
 ipcMain.handle(
   'ai:test',
-  (_event: IpcMainInvokeEvent, opts: { authMode: AiAuthMode; model: string }) =>
-    testConnection(opts || {}),
+  (
+    _event: IpcMainInvokeEvent,
+    opts: { provider: AiProvider; authMode?: AiGenerateOptions['authMode']; model: string },
+  ) => testConnection(opts || { provider: 'gemini' }),
 );
 ipcMain.handle('ai:generate', (_event: IpcMainInvokeEvent, opts: AiGenerateOptions) => {
   if (SMOKE_TEST) {

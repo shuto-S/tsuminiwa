@@ -7,7 +7,13 @@
 // 実際の生成はメインプロセス(window.tsuminiwa.ai)に委譲する。純ロジック(ガード・
 // プール)はテストできるよう、外部依存(実際の生成関数・時刻)を注入できる形にする。
 
-import type { AiAuthMode, AiGenerateOptions, AiGenerateResult } from '../../shared/ipc.ts';
+import type {
+  AiAuthMode,
+  AiGenerateOptions,
+  AiGenerateResult,
+  AiProvider,
+  AiToolDefinition,
+} from '../../shared/ipc.ts';
 
 // 上限のデフォルト
 export const AI_LIMITS = {
@@ -20,15 +26,18 @@ export const AI_LIMITS = {
 export type AiFailureKind = 'quota' | 'auth';
 
 interface AiBackend {
-  hasKey(): Promise<boolean>;
+  hasKey(provider?: AiProvider): Promise<boolean>;
   generate(opts: AiGenerateOptions): Promise<AiGenerateResult>;
 }
 
 interface AiClientSettings {
   aiEnabled: boolean;
   aiConsent: boolean;
+  aiProvider?: AiProvider;
   aiAuthMode: AiAuthMode;
-  aiModel: string;
+  aiModel?: string; // 旧テスト/セーブ互換
+  aiModels?: Partial<Record<AiProvider, string>>;
+  aiAgentEnabled?: boolean;
 }
 
 interface AiClientOptions {
@@ -94,6 +103,15 @@ export class AiClient {
     if (this.onNotice) this.onNotice(kind);
   }
 
+  provider(): AiProvider {
+    return this.settings.aiProvider || 'gemini';
+  }
+
+  model(): string {
+    const provider = this.provider();
+    return this.settings.aiModels?.[provider] || this.settings.aiModel || '';
+  }
+
   underRate(): boolean {
     const d = this.currentDay();
     if (d !== this.day) {
@@ -111,26 +129,72 @@ export class AiClient {
   }
 
   // 1件だけ生成。使えない/失敗時は null(呼び出し側でフォールバック)
-  async generate({ system, prompt, schema, maxOutputTokens }: AiGenerateOptions = {}): Promise<
-    string | null | undefined
-  > {
+  private async request(opts: AiGenerateOptions): Promise<AiGenerateResult | null> {
     if (!this.available() || !this.underRate()) return null;
     // レート枠は await の前に同期で確保する。そうしないと、同じフレームで並行して
     // 走る別種の生成(つぶやき/かわら版/命名補充)が古い lastCallAt を見て、
     // 最小間隔・日次上限をすり抜けてしまう(TOCTOU)
     this.noteCall();
-    if (!(await this.backend.hasKey())) return null;
+    const provider = this.provider();
+    if (!(await this.backend.hasKey(provider))) return null;
     const res = await this.backend.generate({
+      ...opts,
+      provider,
       authMode: this.settings.aiAuthMode,
-      model: this.settings.aiModel,
-      system,
-      prompt,
-      schema,
-      maxOutputTokens,
+      model: this.model(),
     });
-    if (res && res.ok) return res.text;
-    if (res && res.error) this.noteFailure(res.error); // ハードエラーならクールダウン+通知
+    if (res?.ok) return res;
+    if (res?.code === 'quota' || res?.code === 'rate_limit') this.noteFailure('quota');
+    else if (res?.code === 'auth') this.noteFailure('auth');
+    else if (res?.error) this.noteFailure(res.error);
     return null;
+  }
+
+  async generateText(opts: AiGenerateOptions = {}): Promise<string | null | undefined> {
+    const res = await this.request({ ...opts, output: { kind: 'text' } });
+    return res?.text ?? null;
+  }
+
+  async generateJson<T = unknown>(
+    opts: AiGenerateOptions & { schema: Record<string, unknown>; schemaName?: string },
+  ): Promise<T | null> {
+    const res = await this.request({
+      ...opts,
+      output: {
+        kind: 'json',
+        name: opts.schemaName || 'tsuminiwa_response',
+        schema: opts.schema,
+      },
+    });
+    if (!res) return null;
+    if (res.json !== undefined) return res.json as T;
+    try {
+      return JSON.parse(res.text || '') as T;
+    } catch {
+      return null;
+    }
+  }
+
+  async chooseAction(
+    opts: Omit<AiGenerateOptions, 'tools'> & { tools: AiToolDefinition[] },
+  ): Promise<{ name: string; arguments: Record<string, unknown> } | null> {
+    const res = await this.request({
+      ...opts,
+      output: { kind: 'tool', tools: opts.tools },
+    });
+    return res?.toolCall ?? null;
+  }
+
+  // 既存フレーバー呼び出し用の互換メソッド。
+  async generate(opts: AiGenerateOptions = {}): Promise<string | null | undefined> {
+    if (opts.schema) {
+      const value = await this.generateJson({
+        ...opts,
+        schema: opts.schema as Record<string, unknown>,
+      });
+      return value === null ? null : JSON.stringify(value);
+    }
+    return this.generateText(opts);
   }
 
   // プールから1件取り出す。空なら null を返し、必要なら refill() で補充する運用。

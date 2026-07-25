@@ -59,6 +59,24 @@ ELECTRON_ENABLE_LOGGING=1 npx electron .
 昼夜・天気・季節など時間系の機能は、設定で「1日の長さ」「天気の変わる間隔」を
 最短にすると早く確認できる。
 
+## AI の開発設定
+
+AI はバックエンドを持たず、Electron の Main プロセスから選択したプロバイダへ直接接続する。
+リポジトリ直下に `.env.example` をコピーして `.env` を作り、使うプロバイダだけ設定する。
+
+```sh
+cp .env.example .env
+```
+
+- Gemini: `GEMINI_API_KEY`
+- OpenAI: `OPENAI_API_KEY`
+- Anthropic: `ANTHROPIC_API_KEY`
+
+`.env` を読むのは開発起動だけ。パッケージ版は起動プロセスの環境変数だけを参照するため、
+Finder から通常起動した場合にシェルの環境変数が渡る保証はない。APIキーを設定画面や
+セーブデータへ保存する機能はない。旧版の `ai-key.enc` は自動削除しないため、不要なら
+終了後に `~/Library/Application Support/tsuminiwa/ai-key.enc` を手動で削除する。
+
 ## リリース(アプリの更新)手順
 
 ### 自分のMacに入れる

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { DEFAULT_COLS, DEFAULT_MAX_HEIGHT, DEFAULT_SETTINGS } from './config.ts';
+import { DEFAULT_COLS, DEFAULT_MAX_HEIGHT, settingsFromSave } from './config.ts';
 import { World } from './world.ts';
 import { generateWorld } from './terrain.ts';
 import type { WorldGenParams } from './terrain.ts';
@@ -25,6 +25,7 @@ import {
 import { t, setLanguage, getLanguage } from './i18n/index.ts';
 import { rareEvent } from './events.ts';
 import { AiClient } from './ai/client.ts';
+import { VillageAgent } from './ai/village-agent.ts';
 import { OneLevelUndo } from './undo.ts';
 import {
   generateMutter,
@@ -58,7 +59,7 @@ async function main() {
     auto: false,
     gridSize: DEFAULT_COLS,
     maxHeight: DEFAULT_MAX_HEIGHT,
-    settings: { ...DEFAULT_SETTINGS },
+    settings: settingsFromSave(null),
   };
 
   let world: World;
@@ -72,7 +73,7 @@ async function main() {
       state.gridSize = world.cols;
       state.maxHeight = world.maxHeight;
       state.auto = Boolean(save.auto);
-      Object.assign(state.settings, save.settings || {});
+      Object.assign(state.settings, settingsFromSave(save.settings));
       savedCharacters = save.characters;
     } catch {
       loaded.failed = true;
@@ -136,6 +137,12 @@ async function main() {
   autopilot.onEvent = notify;
   characters.onEvent = notify;
   characters.calendar = daynight;
+  const villageAgent = new VillageAgent(ai, characters, world, {
+    weather: () => weather.state,
+    season: () => daynight.season.key,
+    timeOfDay: () => (daynight.isNight ? 'night' : 'day'),
+    recentEvents: () => dayEvents,
+  });
 
   // ---- レアなできごとに AI で一句/小話を添える(#4/#5)。無効・失敗時は何もしない ----
   let flavorBusy = false;
@@ -335,7 +342,7 @@ async function main() {
         showToast(t(ok ? 'shot.shared' : 'shot.shareFail'));
       },
       settingChanged: (key: string, value: any) => {
-        (state.settings as Record<string, unknown>)[key] = value;
+        (state.settings as unknown as Record<string, unknown>)[key] = value;
         if (key === 'language') {
           // 言語を変えたら、動的な表示(天気・季節)も引き直す
           setWeatherDisplay(weather.emoji, weather.state);
@@ -359,7 +366,7 @@ async function main() {
           showToast(t('ai.needConsent'));
           return false;
         }
-        if (!(await window.tsuminiwa.ai.hasKey())) {
+        if (!(await window.tsuminiwa.ai.hasKey(state.settings.aiProvider))) {
           showToast(t('ai.needKey'));
           return false;
         }
@@ -399,7 +406,7 @@ async function main() {
     state.gridSize = world.cols;
     state.maxHeight = world.maxHeight;
     state.auto = Boolean(data.auto);
-    Object.assign(state.settings, DEFAULT_SETTINGS, data.settings || {});
+    Object.assign(state.settings, settingsFromSave(data.settings));
     setLanguage(state.settings.language);
 
     daynight.t = typeof data.dayTime === 'number' ? data.dayTime : 0.1;
@@ -410,6 +417,7 @@ async function main() {
     view.setWorld(world);
     characters.setWorld(world);
     characters.deserialize(data.characters);
+    villageAgent.setWorld(world);
     autopilot.setWorld(world);
     autopilot.enabled = state.auto;
     weather.setWorld(world);
@@ -468,6 +476,7 @@ async function main() {
     world = generateWorld(size, size, maxHeight, params);
     view.setWorld(world);
     characters.setWorld(world);
+    villageAgent.setWorld(world);
     autopilot.setWorld(world);
     weather.setWorld(world);
     waterSim.setWorld(world);
@@ -593,6 +602,7 @@ async function main() {
         refillNamePools();
       }
       characters.update(dt, time, daynight.isNight);
+      villageAgent.update(dt);
       view.update(dt);
 
       if (world.version !== renderedVersion) {

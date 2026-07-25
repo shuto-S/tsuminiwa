@@ -8,6 +8,16 @@ import type { World, Coord, BlockCell, BlockType } from './world.ts';
 // characters.ts 内でだけ使う形（他ファイルは編集しない方針のためローカル定義）
 type Trait = { key: string; speed: number; idle: number };
 type Task = { kind: string; target: number[] };
+export type VillagerJob = 'lumberjack' | 'farmer' | 'fisher' | 'villager';
+export type AgentActionKey = 'work_lumberjack' | 'work_farmer' | 'work_fisher' | 'take_it_easy';
+export interface AgentCandidate {
+  name: string;
+  type: string;
+  job: string | null;
+  trait: { key: string };
+  col: number;
+  row: number;
+}
 type Vec3 = { x: number; y: number; z: number };
 interface CharacterOpts {
   baby?: boolean;
@@ -199,6 +209,7 @@ class Character {
   to: Vec3 | null;
   stepsRemaining: number;
   done: boolean;
+  agentReserved: boolean;
 
   constructor(
     type: string,
@@ -236,6 +247,7 @@ class Character {
       ? (type === 'cat' ? 40 : 25) + Math.floor(Math.random() * 20)
       : Infinity;
     this.done = false;
+    this.agentReserved = false;
     const p = world.positionOf(col, row);
     this.mesh.position.set(p.x, world.topSurfaceY(col, row), p.z);
     this.mesh.rotation.y = Math.random() * Math.PI * 2;
@@ -306,10 +318,13 @@ class Character {
     }
 
     if (this.state === 'idle') {
-      this.idleTimer -= dt * speed;
       const targetY = world.topSurfaceY(this.col, this.row);
       this.mesh.position.y += (targetY - this.mesh.position.y) * Math.min(1, dt * 10);
       this.mesh.position.y += Math.sin(time * 3 + this.phase) * 0.006;
+      // AI がしごとを選んでいる短い間だけ、この本人は手すきのまま待つ。
+      // 夜やおまつりが始まったら予約より通常の集合行動を優先する。
+      if (this.agentReserved && !ctx.isNight && !ctx.festival) return;
+      this.idleTimer -= dt * speed;
       if (this.idleTimer <= 0) {
         if (ctx.isNight && !VISITOR_TYPES.has(this.type)) {
           this.nightMove(world, ctx);
@@ -894,41 +909,42 @@ export class CharacterManager {
         c.task = null;
       }
       c.jobCooldown -= dt;
-      if (!isNight && !this.festivalActive && !c.task && c.state === 'idle' && c.jobCooldown <= 0) {
+      if (
+        !isNight &&
+        !this.festivalActive &&
+        !c.agentReserved &&
+        !c.task &&
+        c.state === 'idle' &&
+        c.jobCooldown <= 0
+      ) {
         this.assignTask(c);
       }
     }
   }
 
-  assignTask(c: Character) {
-    if (c.job === 'lumberjack') {
-      if (this.jobQueue.length > 0) return;
+  planTask(c: Character, job: string | null = c.job): Task | null {
+    if (job === 'lumberjack') {
+      if (this.jobQueue.length > 0) return null;
       const trunks = this.world.columnsWhere((tc, tr) => isTreeColumn(this.world, tc, tr));
-      if (trunks.length < 5) {
-        c.jobCooldown = 60;
-        return;
-      }
+      if (trunks.length < 5) return null;
       trunks.sort(
         (a, b) =>
           this.world.distance(c.col, c.row, a[0], a[1]) -
           this.world.distance(c.col, c.row, b[0], b[1]),
       );
-      c.task = { kind: 'chop', target: trunks[0] };
-      return;
+      return { kind: 'chop', target: trunks[0] };
     }
-    if (c.job === 'farmer') {
+    if (job === 'farmer') {
       const ripe = [...this.world.crops.entries()].filter(([, v]) => v.stage === 2);
       if (ripe.length > 0) {
         const [key] = ripe[Math.floor(Math.random() * ripe.length)];
-        c.task = { kind: 'harvest', target: key.split(',').map(Number) };
-        return;
+        return { kind: 'harvest', target: key.split(',').map(Number) };
       }
       const empty = this.world.columnsWhere(
         (tc, tr) => this.world.topType(tc, tr) === 'farm' && !this.world.crops.has(`${tc},${tr}`),
       );
       if (empty.length > 0) {
-        c.task = { kind: 'plantCrop', target: empty[Math.floor(Math.random() * empty.length)] };
-        return;
+        return { kind: 'plantCrop', target: empty[Math.floor(Math.random() * empty.length)] };
       }
       // はたけが足りなければ、家のそばの草地をたがやす
       const farms = this.world.topsOfType('farm');
@@ -942,14 +958,12 @@ export class CharacterManager {
           ),
         );
         if (spots.length > 0) {
-          c.task = { kind: 'plantFarm', target: spots[0] };
-          return;
+          return { kind: 'plantFarm', target: spots[0] };
         }
       }
-      c.jobCooldown = 30;
-      return;
+      return null;
     }
-    if (c.job === 'fisher') {
+    if (job === 'fisher') {
       const spots = shuffle(
         this.world.columnsWhere(
           (tc, tr) =>
@@ -957,14 +971,127 @@ export class CharacterManager {
             this.world.neighbors(tc, tr).some(([nc, nr]) => this.world.topType(nc, nr) === 'water'),
         ),
       );
-      if (spots.length === 0) {
-        c.jobCooldown = 90;
-        return;
-      }
-      c.task = { kind: 'fish', target: spots[0] };
-      return;
+      return spots.length > 0 ? { kind: 'fish', target: spots[0] } : null;
     }
-    c.jobCooldown = 120; // むらびとはのんびり
+    return null;
+  }
+
+  assignTask(c: Character) {
+    c.task = this.planTask(c);
+    if (c.task) return;
+    c.jobCooldown =
+      c.job === 'lumberjack' ? 60 : c.job === 'farmer' ? 30 : c.job === 'fisher' ? 90 : 120;
+  }
+
+  private agentCharacter(name: string): Character | null {
+    return this.characters.find((c) => c.name === name && c.type === 'villager') || null;
+  }
+
+  private canUseAgent(c: Character): boolean {
+    return (
+      !this.isNight &&
+      !this.festivalActive &&
+      !c.baby &&
+      c.state === 'idle' &&
+      !c.task &&
+      !c.taskDone
+    );
+  }
+
+  reserveAgentCandidate(afterIndex = -1): { candidate: AgentCandidate; index: number } | null {
+    if (this.isNight || this.festivalActive || this.characters.length === 0) return null;
+    for (let offset = 1; offset <= this.characters.length; offset++) {
+      const index = (afterIndex + offset) % this.characters.length;
+      const c = this.characters[index];
+      if (!this.canUseAgent(c) || c.agentReserved) continue;
+      c.agentReserved = true;
+      return {
+        index,
+        candidate: {
+          name: c.name,
+          type: c.type,
+          job: c.job,
+          trait: { key: c.trait.key },
+          col: c.col,
+          row: c.row,
+        },
+      };
+    }
+    return null;
+  }
+
+  releaseAgentCandidate(name: string) {
+    const c = this.agentCharacter(name);
+    if (c) c.agentReserved = false;
+  }
+
+  agentActionKeys(name: string): AgentActionKey[] {
+    const c = this.agentCharacter(name);
+    if (!c || !this.canUseAgent(c)) return [];
+    const actions: AgentActionKey[] = ['take_it_easy'];
+    if (this.planTask(c, 'lumberjack')) actions.unshift('work_lumberjack');
+    if (this.planTask(c, 'farmer')) actions.unshift('work_farmer');
+    if (this.planTask(c, 'fisher')) actions.unshift('work_fisher');
+    return actions;
+  }
+
+  agentSummary() {
+    const jobs = Object.fromEntries(JOBS.map((job) => [job, 0])) as Record<string, number>;
+    for (const c of this.characters) {
+      if (c.type === 'villager' && c.job) jobs[c.job] = (jobs[c.job] || 0) + 1;
+    }
+    return {
+      jobs,
+      resources: {
+        trees: this.world.columnsWhere((c, r) => isTreeColumn(this.world, c, r)).length,
+        farms: this.world.topsOfType('farm').length,
+        ripeCrops: [...this.world.crops.values()].filter((crop) => crop.stage === 2).length,
+        fishingSpots: this.world.columnsWhere(
+          (c, r) =>
+            this.world.isWalkable(c, r) &&
+            this.world.neighbors(c, r).some(([nc, nr]) => this.world.topType(nc, nr) === 'water'),
+        ).length,
+      },
+    };
+  }
+
+  agentCharacters(): AgentCandidate[] {
+    return this.characters.map((c) => ({
+      name: c.name,
+      type: c.type,
+      job: c.job,
+      trait: { key: c.trait.key },
+      col: c.col,
+      row: c.row,
+    }));
+  }
+
+  applyAgentAction(name: string, action: AgentActionKey): boolean {
+    const c = this.agentCharacter(name);
+    if (!c || !c.agentReserved || !this.canUseAgent(c)) return false;
+    if (!this.agentActionKeys(name).includes(action)) return false;
+    if (action === 'take_it_easy') {
+      c.jobCooldown = 120;
+      return true;
+    }
+    const job = action.replace('work_', '') as VillagerJob;
+    if (c.job !== job) this.changeJob(c, job);
+    c.task = this.planTask(c, job);
+    return Boolean(c.task);
+  }
+
+  private changeJob(c: Character, job: VillagerJob) {
+    const position = c.mesh.position.clone();
+    const rotationY = c.mesh.rotation.y;
+    this.scene.remove(c.mesh);
+    disposeMesh(c.mesh);
+    c.job = job;
+    c.mesh = (MAKERS[c.type as keyof typeof MAKERS] as (character: Character) => THREE.Group)(c);
+    c.mesh.position.copy(position);
+    c.mesh.rotation.y = rotationY;
+    c.mesh.scale.setScalar(this.scaleOf(c));
+    this.scene.add(c.mesh);
+    if (this.onEvent) this.onEvent(t('ai.jobChanged', { name: c.name, job: t(`job.${job}`) }));
   }
 
   applyTaskEffect(c: Character) {

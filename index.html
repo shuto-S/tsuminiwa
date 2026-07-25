@@ -298,6 +298,10 @@
               </div>
               <div id="ai-config" class="hidden">
                 <label>
+                  <span data-i18n="settings.aiProvider">プロバイダ</span>
+                  <select id="opt-ai-provider"></select>
+                </label>
+                <label>
                   <span data-i18n="settings.aiAuthMode">認証方式</span>
                   <select id="opt-ai-auth"></select>
                 </label>
@@ -306,24 +310,28 @@
                   <select id="opt-ai-model"></select>
                 </label>
                 <label>
-                  <span
-                    ><span data-i18n="settings.aiKey">APIキー</span> <b id="ai-key-status"></b
-                  ></span>
+                  <span data-i18n="settings.aiCustomModel">カスタムモデルID</span>
                   <input
-                    type="password"
-                    id="ai-key-input"
+                    type="text"
+                    id="opt-ai-custom-model"
                     autocomplete="off"
-                    data-i18n-placeholder="settings.aiKeyPlaceholder"
+                    data-i18n-placeholder="settings.aiCustomModelPlaceholder"
                   />
                 </label>
                 <div class="row ai-buttons">
-                  <button id="ai-key-save" data-i18n="settings.aiKeySave">保存</button>
-                  <button id="ai-key-clear" data-i18n="settings.aiKeyClear">消去</button>
+                  <span
+                    ><span data-i18n="settings.aiEnvKey">環境変数キー</span>
+                    <b id="ai-key-status"></b
+                  ></span>
                   <button id="ai-test" data-i18n="settings.aiTest">接続テスト</button>
                 </div>
                 <div class="row">
                   <span data-i18n="settings.aiConsent">世界の状態を外部AIに送ることに同意する</span>
                   <input type="checkbox" id="opt-ai-consent" />
+                </div>
+                <div class="row">
+                  <span data-i18n="settings.aiAgentEnabled">村人のしごと選びにもAIをつかう</span>
+                  <input type="checkbox" id="opt-ai-agent-enabled" />
                 </div>
                 <p class="note" data-i18n="settings.aiNote">AIはオプトインです。</p>
                 <hr class="sep" />

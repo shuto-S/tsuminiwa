@@ -8,7 +8,7 @@ interface EventDef {
   subject: string;
 }
 
-interface ActionDef {
+export interface ActionDef {
   key: string;
   description: string;
   params?: unknown;
@@ -88,4 +88,29 @@ export function worldManifest() {
     events: listEvents(),
     actions: listActions().map((a) => ({ key: a.key, description: a.description })),
   };
+}
+
+for (const def of [
+  {
+    key: 'work_lumberjack',
+    description:
+      'Choose lumberjack work: tend the forest by chopping a mature tree and replanting.',
+  },
+  {
+    key: 'work_farmer',
+    description: 'Choose farmer work: harvest, plant a crop, or till a nearby field.',
+  },
+  {
+    key: 'work_fisher',
+    description: 'Choose fisher work: go to a safe bank and fish.',
+  },
+  {
+    key: 'take_it_easy',
+    description: 'Take it easy for now and continue ordinary village wandering.',
+  },
+]) {
+  registerAction({
+    ...def,
+    params: { type: 'object', properties: {}, required: [], additionalProperties: false },
+  });
 }

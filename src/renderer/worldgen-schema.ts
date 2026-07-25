@@ -24,7 +24,12 @@ export function worldgenSchema() {
   for (const key of Object.keys(WORLDGEN_PARAMS)) {
     properties[key] = { type: 'number' };
   }
-  return { type: 'object', properties };
+  return {
+    type: 'object',
+    properties,
+    required: Object.keys(properties),
+    additionalProperties: false,
+  };
 }
 
 // 受け取った params を既定で埋め、範囲にクランプする(不正値は無視して既定へ)

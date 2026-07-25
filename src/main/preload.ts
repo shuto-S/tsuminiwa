@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import type { AiAuthMode, AiGenerateOptions, TsuminiwaBridge } from '../shared/ipc.ts';
+import type { AiAuthMode, AiGenerateOptions, AiProvider, TsuminiwaBridge } from '../shared/ipc.ts';
 
 const bridge: TsuminiwaBridge = {
   loadWorld: () => ipcRenderer.invoke('world:load'),
@@ -9,12 +9,12 @@ const bridge: TsuminiwaBridge = {
   saveScreenshot: (dataUrl: string) => ipcRenderer.invoke('shot:save', dataUrl),
   shareToX: (dataUrl: string) => ipcRenderer.invoke('shot:share', dataUrl),
   setAutoLaunch: (enabled: boolean) => ipcRenderer.send('app:autolaunch', enabled),
-  // AI(Gemini)。生成・接続テスト・キー管理はメインプロセスで実行
+  // AI。生成・接続テスト・環境変数の検出はメインプロセスで実行
   ai: {
-    setKey: (key: string) => ipcRenderer.invoke('ai:setKey', key),
-    clearKey: () => ipcRenderer.invoke('ai:clearKey'),
-    hasKey: () => ipcRenderer.invoke('ai:hasKey'),
-    test: (opts: { authMode: AiAuthMode; model: string }) => ipcRenderer.invoke('ai:test', opts),
+    keyStatus: () => ipcRenderer.invoke('ai:keyStatus'),
+    hasKey: (provider?: AiProvider) => ipcRenderer.invoke('ai:hasKey', provider),
+    test: (opts: { provider: AiProvider; authMode?: AiAuthMode; model: string }) =>
+      ipcRenderer.invoke('ai:test', opts),
     generate: (opts: AiGenerateOptions) => ipcRenderer.invoke('ai:generate', opts),
   },
 };
