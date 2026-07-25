@@ -1,21 +1,29 @@
 name: Release
 
-# v* タグを push すると、macOS (Apple Silicon) 向けの .app を
-# zip にして GitHub Releases に添付する
+# v* タグでは署名・公証済みアプリを GitHub Releases へ公開する。
+# workflow_dispatch は公開せず、同じ署名・公証フローの成果物だけを生成する。
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  release:
-    runs-on: macos-14 # arm64
+  build:
+    runs-on: macos-14
+    timeout-minutes: 60
     env:
       APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
       APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-      APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+      APPLE_NOTARY_API_KEY_P8: ${{ secrets.APPLE_NOTARY_API_KEY_P8 }}
+      APPLE_NOTARY_API_KEY_ID: ${{ secrets.APPLE_NOTARY_API_KEY_ID }}
+      APPLE_NOTARY_API_ISSUER_ID: ${{ secrets.APPLE_NOTARY_API_ISSUER_ID }}
       APPLE_ID: ${{ secrets.APPLE_ID }}
       APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
       APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
@@ -32,68 +40,212 @@ jobs:
           npm run lint
           npm run typecheck
           npm test
-      - name: Package (Apple Silicon + Intel)
+      - name: Validate release credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -z "$APPLE_CERTIFICATE_P12" ] || [ -z "$APPLE_CERTIFICATE_PASSWORD" ]; then
+            echo "::error::APPLE_CERTIFICATE_P12 と APPLE_CERTIFICATE_PASSWORD が必要です。"
+            exit 1
+          fi
+
+          api_key_parts=0
+          [ -n "$APPLE_NOTARY_API_KEY_P8" ] && api_key_parts=$((api_key_parts + 1))
+          [ -n "$APPLE_NOTARY_API_KEY_ID" ] && api_key_parts=$((api_key_parts + 1))
+          [ -n "$APPLE_NOTARY_API_ISSUER_ID" ] && api_key_parts=$((api_key_parts + 1))
+
+          if [ "$api_key_parts" -eq 3 ]; then
+            echo "NOTARY_AUTH=api-key" >> "$GITHUB_ENV"
+          elif [ "$api_key_parts" -ne 0 ]; then
+            echo "::error::App Store Connect APIキーの3 Secretsをすべて設定してください。"
+            exit 1
+          elif [ -n "$APPLE_ID" ] && [ -n "$APPLE_APP_PASSWORD" ] && [ -n "$APPLE_TEAM_ID" ]; then
+            echo "NOTARY_AUTH=apple-id" >> "$GITHUB_ENV"
+            echo "::notice::公証にはApple ID認証を使用します。Team APIキーへの移行を推奨します。"
+          else
+            echo "::error::公証用のTeam APIキー、またはApple ID認証の3 Secretsが必要です。"
+            exit 1
+          fi
+      - name: Import signing certificate
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          keychain_path="$RUNNER_TEMP/tsuminiwa-signing.keychain-db"
+          keychain_password="$(openssl rand -hex 32)"
+          certificate_path="$RUNNER_TEMP/certificate.p12"
+
+          printf '%s' "$APPLE_CERTIFICATE_P12" | base64 -D > "$certificate_path"
+          chmod 600 "$certificate_path"
+          security create-keychain -p "$keychain_password" "$keychain_path"
+          security set-keychain-settings -lut 21600 "$keychain_path"
+          security unlock-keychain -p "$keychain_password" "$keychain_path"
+          security import "$certificate_path" \
+            -P "$APPLE_CERTIFICATE_PASSWORD" \
+            -t cert \
+            -f pkcs12 \
+            -k "$keychain_path" \
+            -T /usr/bin/codesign
+          security list-keychain -d user -s "$keychain_path"
+          security set-key-partition-list \
+            -S apple-tool:,apple: \
+            -s \
+            -k "$keychain_password" \
+            "$keychain_path"
+
+          signing_identity="$(
+            security find-identity -v -p codesigning "$keychain_path" |
+              awk '/"Developer ID Application:/ { print $2; exit }'
+          )"
+          if [ -z "$signing_identity" ]; then
+            echo "::error::P12内に有効なDeveloper ID Application証明書がありません。"
+            exit 1
+          fi
+
+          echo "::add-mask::$signing_identity"
+          echo "CI_SIGNING_IDENTITY=$signing_identity" >> "$GITHUB_ENV"
+          echo "CI_SIGNING_KEYCHAIN=$keychain_path" >> "$GITHUB_ENV"
+      - name: Prepare App Store Connect API key
+        if: env.NOTARY_AUTH == 'api-key'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          api_key_path="$RUNNER_TEMP/AuthKey_${APPLE_NOTARY_API_KEY_ID}.p8"
+          printf '%s' "$APPLE_NOTARY_API_KEY_P8" | base64 -D > "$api_key_path"
+          chmod 600 "$api_key_path"
+          echo "CI_NOTARY_API_KEY_PATH=$api_key_path" >> "$GITHUB_ENV"
+      - name: Package and sign (Apple Silicon + Intel)
         run: |
           npm run package
-          npm run package --arch=x64
-      - name: Import signing certificate
-        if: env.APPLE_CERTIFICATE_P12 != '' && env.APPLE_CERTIFICATE_PASSWORD != '' && env.APPLE_SIGNING_IDENTITY != '' && env.APPLE_ID != '' && env.APPLE_APP_PASSWORD != '' && env.APPLE_TEAM_ID != ''
+          npm run package -- --arch=x64
+      - name: Verify signatures
+        shell: bash
         run: |
-          KEYCHAIN_PATH="$RUNNER_TEMP/tsuminiwa-signing.keychain-db"
-          KEYCHAIN_PASSWORD="$(openssl rand -hex 16)"
-          echo "$APPLE_CERTIFICATE_P12" | base64 -D > "$RUNNER_TEMP/certificate.p12"
-          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security import "$RUNNER_TEMP/certificate.p12" -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
-          security list-keychain -d user -s "$KEYCHAIN_PATH"
-          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-      - name: Sign app bundles
-        if: env.APPLE_CERTIFICATE_P12 != '' && env.APPLE_CERTIFICATE_PASSWORD != '' && env.APPLE_SIGNING_IDENTITY != '' && env.APPLE_ID != '' && env.APPLE_APP_PASSWORD != '' && env.APPLE_TEAM_ID != ''
-        run: |
+          set -euo pipefail
+
           for arch in arm64 x64; do
-            codesign --deep --force --options runtime --timestamp \
-              --sign "$APPLE_SIGNING_IDENTITY" \
-              "release/つみにわ-darwin-$arch/つみにわ.app"
-            codesign --verify --deep --strict --verbose=2 \
-              "release/つみにわ-darwin-$arch/つみにわ.app"
+            app="release/つみにわ-darwin-$arch/つみにわ.app"
+            codesign --verify --deep --strict --verbose=2 "$app"
+            codesign --display --verbose=4 "$app"
           done
-          echo "SIGNED=true" >> "$GITHUB_ENV"
       - name: Notarize and staple app bundles
-        if: env.SIGNED == 'true' && env.APPLE_ID != '' && env.APPLE_APP_PASSWORD != '' && env.APPLE_TEAM_ID != ''
+        shell: bash
         run: |
-          for arch in arm64 x64; do
-            APP="release/つみにわ-darwin-$arch/つみにわ.app"
-            SUBMISSION="$RUNNER_TEMP/tsuminiwa-$arch-notary.zip"
-            ditto -c -k --sequesterRsrc --keepParent "$APP" "$SUBMISSION"
-            xcrun notarytool submit "$SUBMISSION" --wait \
-              --apple-id "$APPLE_ID" \
-              --password "$APPLE_APP_PASSWORD" \
-              --team-id "$APPLE_TEAM_ID"
-            xcrun stapler staple "$APP"
-            xcrun stapler validate "$APP"
-          done
-          echo "NOTARIZED=true" >> "$GITHUB_ENV"
-      - name: Zip app bundles
-        run: |
-          for arch in arm64 x64; do
-            (cd "release/つみにわ-darwin-$arch" && \
-             ditto -c -k --sequesterRsrc --keepParent "つみにわ.app" \
-               "../tsuminiwa-${GITHUB_REF_NAME}-mac-$arch.zip")
-          done
-      - name: Prepare release notes
-        run: |
-          if [ "$NOTARIZED" = "true" ]; then
-            echo "arm64 = Apple Silicon / x64 = Intel Mac。Developer ID 署名・Apple 公証済みです。" > release-notes.txt
+          set -euo pipefail
+
+          if [ "$NOTARY_AUTH" = "api-key" ]; then
+            notary_args=(
+              --key "$CI_NOTARY_API_KEY_PATH"
+              --key-id "$APPLE_NOTARY_API_KEY_ID"
+              --issuer "$APPLE_NOTARY_API_ISSUER_ID"
+            )
           else
-            echo "arm64 = Apple Silicon / x64 = Intel Mac。署名なしビルドのため、初回は右クリック→「開く」で起動してください。" > release-notes.txt
+            notary_args=(
+              --apple-id "$APPLE_ID"
+              --password "$APPLE_APP_PASSWORD"
+              --team-id "$APPLE_TEAM_ID"
+            )
           fi
-      - name: Create release
+
+          for arch in arm64 x64; do
+            app="release/つみにわ-darwin-$arch/つみにわ.app"
+            submission="$RUNNER_TEMP/tsuminiwa-$arch-notary.zip"
+            result="$RUNNER_TEMP/notary-$arch.json"
+
+            ditto -c -k --sequesterRsrc --keepParent "$app" "$submission"
+            if ! xcrun notarytool submit "$submission" \
+              --wait \
+              --output-format json \
+              "${notary_args[@]}" > "$result"; then
+              cat "$result"
+              submission_id="$(jq -r '.id // empty' "$result")"
+              if [ -n "$submission_id" ]; then
+                xcrun notarytool log "$submission_id" "${notary_args[@]}" || true
+              fi
+              exit 1
+            fi
+
+            cat "$result"
+            submission_id="$(jq -r '.id // empty' "$result")"
+            status="$(jq -r '.status // empty' "$result")"
+            if [ "$status" != "Accepted" ]; then
+              if [ -n "$submission_id" ]; then
+                xcrun notarytool log "$submission_id" "${notary_args[@]}" || true
+              fi
+              echo "::error::Apple公証がAcceptedになりませんでした: $status"
+              exit 1
+            fi
+
+            xcrun stapler staple "$app"
+            xcrun stapler validate "$app"
+            spctl --assess --type execute --verbose=4 "$app"
+          done
+      - name: Create release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          for arch in arm64 x64; do
+            (
+              cd "release/つみにわ-darwin-$arch"
+              ditto -c -k --sequesterRsrc --keepParent "つみにわ.app" \
+                "../tsuminiwa-${GITHUB_REF_NAME}-mac-$arch.zip"
+            )
+          done
+
+          (
+            cd release
+            shasum -a 256 \
+              "tsuminiwa-${GITHUB_REF_NAME}-mac-arm64.zip" \
+              "tsuminiwa-${GITHUB_REF_NAME}-mac-x64.zip" \
+              > SHA256SUMS.txt
+          )
+          echo "arm64 = Apple Silicon / x64 = Intel Mac。Developer ID 署名・Apple 公証済みです。" \
+            > release/release-notes.txt
+      - name: Upload signed artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: tsuminiwa-${{ github.ref_name }}-signed
+          path: |
+            release/tsuminiwa-${{ github.ref_name }}-mac-arm64.zip
+            release/tsuminiwa-${{ github.ref_name }}-mac-x64.zip
+            release/SHA256SUMS.txt
+            release/release-notes.txt
+          if-no-files-found: error
+          retention-days: 14
+      - name: Clean up signing credentials
+        if: always()
+        shell: bash
+        run: |
+          if [ -n "${CI_SIGNING_KEYCHAIN:-}" ]; then
+            security delete-keychain "$CI_SIGNING_KEYCHAIN" || true
+          fi
+          rm -f \
+            "$RUNNER_TEMP/certificate.p12" \
+            "$RUNNER_TEMP"/AuthKey_*.p8 \
+            "$RUNNER_TEMP"/notary-*.json \
+            "$RUNNER_TEMP"/tsuminiwa-*-notary.zip
+
+  publish:
+    if: github.event_name == 'push'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: tsuminiwa-${{ github.ref_name }}-signed
+          path: release-assets
+      - name: Create GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release create "$GITHUB_REF_NAME" \
-            "release/tsuminiwa-${GITHUB_REF_NAME}-mac-arm64.zip" \
-            "release/tsuminiwa-${GITHUB_REF_NAME}-mac-x64.zip" \
+            "release-assets/tsuminiwa-${GITHUB_REF_NAME}-mac-arm64.zip" \
+            "release-assets/tsuminiwa-${GITHUB_REF_NAME}-mac-x64.zip" \
+            "release-assets/SHA256SUMS.txt" \
             --generate-notes \
-            --notes-file release-notes.txt
+            --notes-file release-assets/release-notes.txt

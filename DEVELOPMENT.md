@@ -92,25 +92,45 @@ ditto "release/つみにわ-darwin-arm64/つみにわ.app" "/Applications/つみ
 
 ### GitHub Releases に公開する
 
-タグを push すると `.github/workflows/release.yml` が macOS ランナーでパッケージし、
-zip を Releases に自動添付する:
+`.github/workflows/release.yml` は macOS ランナーで次を行う:
 
-次の GitHub Actions Secrets がすべて設定されている場合は Developer ID 署名・Apple 公証・
-staple まで自動で行う。未設定の場合は従来どおり署名なしでリリースする。
+- Actions 画面から手動実行: 署名・公証済みzipをActions Artifactへ保存する。Releaseは作らない
+- `v*` タグをpush: 同じ検証後、署名・公証済みzipをGitHub Releasesへ公開する
+
+証明書または公証用Secretsが不足している場合は失敗させ、署名なしビルドを公開しない。
+署名には次の2つを使う。署名IDはP12から自動検出するため、名前をSecretへ登録する必要はない。
 
 - `APPLE_CERTIFICATE_P12`: Developer ID Application 証明書の `.p12` を base64 化した値
 - `APPLE_CERTIFICATE_PASSWORD`: `.p12` のパスワード
-- `APPLE_SIGNING_IDENTITY`: `Developer ID Application: ...` の完全な名前
-- `APPLE_ID`: 公証に使う Apple ID
+
+公証認証には、App Store Connectの**Team APIキー**を推奨する。個人APIキーは
+`notarytool` で利用できない。App Store Connectの
+「ユーザとアクセス → 統合 → App Store Connect API → Team Keys」で、
+公証権限を持つ最小のロールのキーを作成する。`.p8` は一度しかダウンロードできない。
+
+- `APPLE_NOTARY_API_KEY_P8`: Team APIキーの `.p8` を base64 化した値
+- `APPLE_NOTARY_API_KEY_ID`: Key ID
+- `APPLE_NOTARY_API_ISSUER_ID`: Issuer ID
+
+Team APIキーを準備するまでの移行用として、既存のApple ID認証にもフォールバックする:
+
+- `APPLE_ID`: 公証に使うApple ID
 - `APPLE_APP_PASSWORD`: App用パスワード
 - `APPLE_TEAM_ID`: Apple Developer Team ID
 
+`.p8` はMacで次のようにクリップボードへコピーし、GitHub Actions Secretへ登録する:
+
 ```sh
-git tag v0.2.0
-git push --tags
+base64 -i AuthKey_XXXXXXXXXX.p8 | tr -d '\n' | pbcopy
 ```
 
-ダウンロードした人は署名なしのため初回のみ右クリック→「開く」が必要。
+最初はActions画面の `Release` → `Run workflow` で手動実行し、署名・公証・
+Gatekeeper検証が通ったArtifactを確認する。その後、新しいバージョンタグをpushする:
+
+```sh
+git tag vX.Y.Z
+git push origin vX.Y.Z
+```
 
 ### CI
 
