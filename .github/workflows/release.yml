@@ -244,6 +244,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release create "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
             "release-assets/tsuminiwa-${GITHUB_REF_NAME}-mac-arm64.zip" \
             "release-assets/tsuminiwa-${GITHUB_REF_NAME}-mac-x64.zip" \
             "release-assets/SHA256SUMS.txt" \
