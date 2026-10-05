@@ -130,6 +130,9 @@ jobs:
             codesign --verify --deep --strict --verbose=2 "$app"
             codesign --display --verbose=4 "$app"
           done
+      - name: Smoke test signed Apple Silicon app
+        timeout-minutes: 3
+        run: '"release/つみにわ-darwin-arm64/つみにわ.app/Contents/MacOS/つみにわ" --smoke-test'
       - name: Notarize and staple app bundles
         shell: bash
         run: |

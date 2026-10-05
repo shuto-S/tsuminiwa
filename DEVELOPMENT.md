@@ -125,7 +125,8 @@ base64 -i AuthKey_XXXXXXXXXX.p8 | tr -d '\n' | pbcopy
 ```
 
 最初はActions画面の `Release` → `Run workflow` で手動実行し、署名・公証・
-Gatekeeper検証が通ったArtifactを確認する。その後、新しいバージョンタグをpushする:
+Gatekeeper検証と署名済みApple SiliconアプリのUIスモークテストが通ったArtifactを確認する。
+その後、新しいバージョンタグをpushする:
 
 ```sh
 git tag vX.Y.Z
